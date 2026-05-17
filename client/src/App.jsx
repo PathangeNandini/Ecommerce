@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import Navbar from "./components/Navbar";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
@@ -23,6 +24,13 @@ function App() {
       </Routes>
 
     </BrowserRouter>
+=======
+function App() {
+  return (
+    <div>
+      <h1>Food Delivery Platform</h1>
+    </div>
+>>>>>>> 8b316517a531f7badef938e90e2a5f76bbf0f7b2
   );
 }
 
