@@ -1,5 +1,7 @@
 const express = require('express');
+
 const router = express.Router();
+
 const {
   placeOrder,
   getOrder,
@@ -7,15 +9,37 @@ const {
   getDailyRevenue,
   getMyOrders
 } = require('../controllers/order.controller');
-const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
 
-// All order routes are protected
-router.use(authMiddleware);
+const {
+  protect,
+  restaurantOnly,
+  courierOnly
+} = require('../middleware/authMiddleware');
+
+// Protect all order routes
+router.use(protect);
 
 router.post('/', placeOrder);
+
 router.get('/my', getMyOrders);
-router.get('/revenue', roleMiddleware('restaurant'), getDailyRevenue);
+
+router.get('/revenue', restaurantOnly, getDailyRevenue);
+
 router.get('/:id', getOrder);
-router.patch('/:id/status', roleMiddleware('restaurant', 'courier'), updateStatus);
+
+// Combined role check
+router.patch('/:id/status', (req, res, next) => {
+  if (
+    req.user.role === 'restaurant' ||
+    req.user.role === 'courier'
+  ) {
+    return next();
+  }
+
+  return res.status(403).json({
+    message: 'Access denied'
+  });
+
+}, updateStatus);
 
 module.exports = router;

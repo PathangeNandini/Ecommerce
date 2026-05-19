@@ -1,0 +1,60 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────
+#  docker-compose.yml
+#  Runs the full Food Delivery Platform stack locally.
+#
+#  Usage:
+#    docker-compose up --build          # first run
+#    docker-compose up                  # subsequent runs
+#    docker-compose down                # stop & remove containers
+#    docker-compose down -v             # also remove volumes
+# ─────────────────────────────────────────────────────────
+
+services:
+
+  # ── Express / Socket.io backend ──────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: foodrush_server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"           # expose backend on host port 5000
+    environment:
+      NODE_ENV:          production
+      PORT:              5000
+      MONGO_URI:         ${mongodb://foodadmin:nAg_UFmk4Jx-yEN@ac-va86gzk-shard-00-00.wo9czml.mongodb.net:27017,ac-va86gzk-shard-00-01.wo9czml.mongodb.net:27017,ac-va86gzk-shard-00-02.wo9czml.mongodb.net:27017/fooddelivery?ssl=true&replicaSet=atlas-14if7l-shard-0&authSource=admin&retryWrites=true&w=majority&appName=Cluster0}
+      JWT_SECRET:        ${JWT_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    env_file:
+      - ./server/.env         # load local .env file automatically
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - foodrush_net
+
+  # ── React + nginx frontend ────────────────────────────
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    container_name: foodrush_client
+    restart: unless-stopped
+    ports:
+      - "80:80"               # serve frontend on host port 80
+    depends_on:
+      server:
+        condition: service_healthy   # wait until backend passes health check
+    networks:
+      - foodrush_net
+
+# ── Shared network ─────────────────────────────────────
+networks:
+  foodrush_net:
+    driver: bridge

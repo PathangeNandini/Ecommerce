@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────
+#  .gitignore — Food Delivery Platform
+# ─────────────────────────────────────────────
+
+# ── Dependencies ────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Environment variables (NEVER commit) ────
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+server/.env
+
+# ── Build outputs ───────────────────────────
+client/dist/
+client/build/
+server/dist/
+
+# ── Logs ────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── OS files ────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── IDE / Editor ────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── Test coverage ───────────────────────────
+coverage/
+.nyc_output/
+
+# ── Docker ──────────────────────────────────
+# Keep Dockerfiles tracked, ignore generated volumes
+docker-data/
+
+# ── Misc ────────────────────────────────────
+*.tgz
+.cache/
+.temp/
