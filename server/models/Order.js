@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
  * Order model
  * 
  * Status flow:
- *   placed → preparing → assigned → transit → delivered
+ *   placed → preparing → assigned → transit → delivered 
  * 
  * Each status change emits a Socket.io event to the consumer.
  */
