@@ -1,55 +1,37 @@
-const Anthropic = require('@anthropic-ai/sdk');
+// server/utils/nlpHelper.js
+// Keyword suggestions based on order items — no external API needed
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const Order = require('../models/Order');
 
-/**
- * nlpHelper.js
- * 
- * Uses the Claude API to suggest relevant food review keywords
- * based on what the user ordered.
- * 
- * Example:
- *   input:  "Butter Chicken, Garlic Naan, Mango Lassi"
- *   output: ["creamy", "aromatic", "well-spiced", "fresh bread", "refreshing"]
- */
+const keywordBank = {
+  biryani:      ['aromatic', 'flavourful', 'well-spiced', 'tender meat', 'perfect rice'],
+  chicken:      ['juicy', 'well-cooked', 'tender', 'spicy', 'finger-licking'],
+  mutton:       ['tender', 'rich gravy', 'well-marinated', 'flavourful', 'slow-cooked'],
+  pizza:        ['crispy crust', 'cheesy', 'generous toppings', 'well-baked', 'tasty sauce'],
+  dosa:         ['crispy', 'golden', 'thin', 'well-fermented', 'served hot'],
+  idli:         ['soft', 'fluffy', 'fresh', 'light', 'good chutney'],
+  vada:         ['crispy outside', 'soft inside', 'hot', 'fresh', 'well-fried'],
+  coffee:       ['strong', 'aromatic', 'perfect blend', 'hot', 'refreshing'],
+  default:      ['fresh', 'tasty', 'good portion', 'value for money', 'would recommend']
+};
 
-/**
- * Get AI-suggested keywords for a review based on ordered items.
- * @param {string} orderedItems - Comma-separated list of ordered item names
- * @returns {Promise<string[]>} array of 5 keyword suggestions
- */
-async function suggestKeywords(orderedItems) {
+const suggestKeywords = async (orderId) => {
   try {
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 200,
-      messages: [
-        {
-          role: 'user',
-          content: `Suggest exactly 5 specific, useful food review keywords for someone who ordered: ${orderedItems}.
-          
-Return ONLY a JSON array of 5 strings, nothing else. Example format: ["crispy", "well-seasoned", "generous portion", "fresh ingredients", "aromatic"]
+    const order = await Order.findById(orderId);
+    if (!order) return keywordBank.default;
 
-The keywords should be descriptive adjectives or short phrases a reviewer would actually use.`
-        }
-      ]
-    });
+    const itemNames = order.items.map(i => i.name.toLowerCase()).join(' ');
 
-    const responseText = message.content[0].text.trim();
-
-    // Parse the JSON array from the response
-    const keywords = JSON.parse(responseText);
-
-    if (!Array.isArray(keywords)) {
-      throw new Error('Response was not an array');
+    for (const [key, keywords] of Object.entries(keywordBank)) {
+      if (key !== 'default' && itemNames.includes(key)) {
+        return keywords;
+      }
     }
 
-    return keywords.slice(0, 5); // Ensure max 5
+    return keywordBank.default;
   } catch (err) {
-    console.error('Claude API error:', err.message);
-    // Return fallback keywords if API fails
-    return ['delicious', 'fresh', 'well-portioned', 'flavorful', 'good value'];
+    return keywordBank.default;
   }
-}
+};
 
 module.exports = { suggestKeywords };

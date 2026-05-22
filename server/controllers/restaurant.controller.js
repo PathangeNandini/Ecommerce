@@ -9,7 +9,7 @@ exports.getNearby = async (req, res) => {
     const {
       lat,
       lng,
-      radius = 500, // increased default radius
+      radius = 500,
       cuisine,
       minRating,
       page = 0
@@ -28,7 +28,7 @@ exports.getNearby = async (req, res) => {
       $geoNear: {
         near: {
           type: 'Point',
-          coordinates: [parseFloat(lng), parseFloat(lat)] // IMPORTANT: [lng, lat]
+          coordinates: [parseFloat(lng), parseFloat(lat)]
         },
         distanceField: 'distance',
         maxDistance: parseFloat(radius) * 1000,
@@ -79,6 +79,7 @@ exports.getNearby = async (req, res) => {
 
   } catch (err) {
     console.error('Restaurant fetch error:', err);
+
     res.status(500).json({
       msg: err.message
     });

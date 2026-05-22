@@ -5,11 +5,6 @@ const User = require('../models/User');
 /**
  * POST /api/orders
  * Place a new order.
- * 
- * SECURITY: We never trust the price from the client.
- * We re-fetch each item from the DB and calculate totalPrice server-side.
- * 
- * Body: { restaurantId, items: [{ menuItemId, qty }], deliveryAddress }
  */
 exports.placeOrder = async (req, res) => {
   try {
@@ -19,11 +14,10 @@ exports.placeOrder = async (req, res) => {
       return res.status(400).json({ msg: 'Cart is empty' });
     }
 
-    // Fetch menu items from DB and validate
-    const menuItemIds = items.map(i => i.menuItemId);
+    // Fetch menu items from DB — removed restaurantId filter to avoid mismatch
+    const menuItemIds = items.map(i => i.menuItemId || i._id);
     const dbItems = await MenuItem.find({
       _id: { $in: menuItemIds },
-      restaurantId,
       available: true
     });
 
@@ -31,25 +25,20 @@ exports.placeOrder = async (req, res) => {
       return res.status(400).json({ msg: 'Some items are unavailable or not found' });
     }
 
-    // Build order items with server-side pricing (snapshots)
+    // Build order items with server-side pricing
     const orderItems = items.map(cartItem => {
-      const dbItem = dbItems.find(d => d._id.toString() === cartItem.menuItemId);
+      const id = cartItem.menuItemId || cartItem._id;
+      const dbItem = dbItems.find(d => d._id.toString() === id.toString());
       return {
         menuItemId: dbItem._id,
-        name: dbItem.name,     // Snapshot in case menu changes later
-        price: dbItem.price,   // Server-authoritative price
-        qty: cartItem.qty
+        name: dbItem.name,
+        price: dbItem.price,
+        qty: cartItem.qty || cartItem.quantity || 1
       };
     });
 
     // Calculate total server-side
     const totalPrice = orderItems.reduce((sum, item) => sum + item.price * item.qty, 0);
-
-    // Simulate payment gateway (always succeeds in this mock)
-    const paymentSuccess = true;
-    if (!paymentSuccess) {
-      return res.status(402).json({ msg: 'Payment failed' });
-    }
 
     const order = await Order.create({
       userId: req.user.id,
@@ -60,16 +49,18 @@ exports.placeOrder = async (req, res) => {
       status: 'placed'
     });
 
-    // Emit socket event to the restaurant's room
+    // Emit socket event to restaurant
     const io = req.app.get('io');
-    io.to(`restaurant:${restaurantId}`).emit('order:placed', {
-      orderId: order._id,
-      items: orderItems,
-      totalPrice,
-      userId: req.user.id,
-      status: 'placed',
-      createdAt: order.createdAt
-    });
+    if (io) {
+      io.to(`restaurant:${restaurantId}`).emit('order:placed', {
+        orderId: order._id,
+        items: orderItems,
+        totalPrice,
+        userId: req.user.id,
+        status: 'placed',
+        createdAt: order.createdAt
+      });
+    }
 
     res.status(201).json(order);
   } catch (err) {
@@ -80,7 +71,6 @@ exports.placeOrder = async (req, res) => {
 
 /**
  * GET /api/orders/:id
- * Get a single order by ID. Users can only see their own orders.
  */
 exports.getOrder = async (req, res) => {
   try {
@@ -90,7 +80,6 @@ exports.getOrder = async (req, res) => {
 
     if (!order) return res.status(404).json({ msg: 'Order not found' });
 
-    // Consumers can only view their own orders
     if (req.user.role === 'consumer' && order.userId._id.toString() !== req.user.id) {
       return res.status(403).json({ msg: 'Access denied' });
     }
@@ -103,10 +92,6 @@ exports.getOrder = async (req, res) => {
 
 /**
  * PATCH /api/orders/:id/status
- * Update the status of an order.
- * Emits a socket event to the consumer after update.
- * 
- * Body: { status } — one of: preparing, assigned, transit, delivered
  */
 exports.updateStatus = async (req, res) => {
   try {
@@ -125,13 +110,14 @@ exports.updateStatus = async (req, res) => {
 
     if (!order) return res.status(404).json({ msg: 'Order not found' });
 
-    // Emit real-time update to the consumer tracking this order
     const io = req.app.get('io');
-    io.to(`order:${order._id}`).emit(`order:${status}`, {
-      orderId: order._id,
-      status,
-      updatedAt: new Date()
-    });
+    if (io) {
+      io.to(`order:${order._id}`).emit(`order:${status}`, {
+        orderId: order._id,
+        status,
+        updatedAt: new Date()
+      });
+    }
 
     res.json(order);
   } catch (err) {
@@ -141,41 +127,20 @@ exports.updateStatus = async (req, res) => {
 
 /**
  * GET /api/orders/revenue
- * Daily revenue for a restaurant. Restaurant owners only.
- * 
- * Query params: date (optional, defaults to today)
  */
 exports.getDailyRevenue = async (req, res) => {
   try {
     const date = req.query.date ? new Date(req.query.date) : new Date();
+    const startOfDay = new Date(date); startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);   endOfDay.setHours(23, 59, 59, 999);
 
-    // Set time range for the full day
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Find the restaurant owned by this user
     const Restaurant = require('../models/Restaurant');
     const restaurant = await Restaurant.findOne({ ownerId: req.user.id });
     if (!restaurant) return res.status(404).json({ msg: 'Restaurant not found for this user' });
 
-    // Aggregate delivered orders for the day
     const result = await Order.aggregate([
-      {
-        $match: {
-          restaurantId: restaurant._id,
-          status: 'delivered',
-          createdAt: { $gte: startOfDay, $lte: endOfDay }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: '$totalPrice' },
-          orderCount: { $sum: 1 }
-        }
-      }
+      { $match: { restaurantId: restaurant._id, status: 'delivered', createdAt: { $gte: startOfDay, $lte: endOfDay } } },
+      { $group: { _id: null, totalRevenue: { $sum: '$totalPrice' }, orderCount: { $sum: 1 } } }
     ]);
 
     res.json({
@@ -190,7 +155,6 @@ exports.getDailyRevenue = async (req, res) => {
 
 /**
  * GET /api/orders/my
- * Get all orders for the logged-in consumer.
  */
 exports.getMyOrders = async (req, res) => {
   try {
@@ -202,5 +166,3 @@ exports.getMyOrders = async (req, res) => {
     res.status(500).json({ msg: err.message });
   }
 };
-
-
