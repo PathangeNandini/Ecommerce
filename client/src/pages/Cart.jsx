@@ -5,7 +5,7 @@ import { useCart } from "../context/CartContext";
 import "./Cart.css";
 
 export default function Cart() {
-  const { items, restaurantId, restaurantName, total, clearCart } = useCart();
+  const { items, restaurantId, restaurantName, total, removeItem, clearCart } = useCart();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -14,16 +14,25 @@ export default function Cart() {
     setError("");
     setLoading(true);
     try {
+      // Use menuItemId from CartContext (our format)
+      // Send qty (not quantity) — matches order.controller.js
       const payload = {
         restaurantId,
-        items: items.map((i) => ({ menuItemId: i._id, quantity: i.quantity, price: i.price })),
-        totalPrice: total,
+        items: items.map((i) => ({
+          menuItemId: i.menuItemId || i._id,  // handle both formats
+          qty: i.quantity
+        })),
       };
+
       const { data } = await api.post("/orders", payload);
       clearCart();
       navigate(`/order/${data._id}`);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to place order. Try again.");
+      setError(
+        err.response?.data?.msg ||
+        err.response?.data?.message ||
+        "Failed to place order. Try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -52,12 +61,23 @@ export default function Cart() {
 
           <div className="order-items">
             {items.map((item) => (
-              <div key={item._id} className="order-item-row">
+              <div key={item.menuItemId || item._id} className="order-item-row">
                 <div className="order-item-left">
                   <span className="order-item-qty">{item.quantity}×</span>
                   <span className="order-item-name">{item.name}</span>
                 </div>
-                <span className="order-item-subtotal">₹{(item.price * item.quantity).toFixed(2)}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span className="order-item-subtotal">
+                    ₹{(item.price * item.quantity).toFixed(2)}
+                  </span>
+                  <button
+                    onClick={() => removeItem(item.menuItemId || item._id)}
+                    style={{
+                      background: "#FEE2E2", color: "#DC2626", border: "none",
+                      borderRadius: "50%", width: 26, height: 26, cursor: "pointer", fontSize: 16
+                    }}
+                  >−</button>
+                </div>
               </div>
             ))}
           </div>
@@ -97,6 +117,17 @@ export default function Cart() {
             disabled={loading}
           >
             {loading ? "Placing Order…" : `Place Order · ₹${total.toFixed(2)}`}
+          </button>
+
+          <button
+            onClick={clearCart}
+            style={{
+              width: "100%", marginTop: 10, padding: "0.6rem",
+              background: "transparent", color: "#DC2626",
+              border: "1px solid #FCA5A5", borderRadius: 8, cursor: "pointer", fontSize: 14
+            }}
+          >
+            Clear Cart
           </button>
         </div>
       </div>
