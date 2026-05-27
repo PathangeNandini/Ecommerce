@@ -1,42 +1,53 @@
-require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const http = require('http');
+const cors = require('cors');
+const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const { initSocket } = require('./config/socket');
 
-// route imports
-const authRoutes       = require('./routes/auth.routes');
-const restaurantRoutes = require('./routes/restaurant.routes');
-const menuRoutes       = require('./routes/menu.routes');
-const orderRoutes      = require('./routes/order.routes');
-const reviewRoutes     = require('./routes/review.routes');
+// Load env vars first
+dotenv.config();
 
+// Connect to MongoDB
 connectDB();
 
 const app = express();
 const httpServer = http.createServer(app);
 
+// Initialize Socket.io on the HTTP server
 const io = initSocket(httpServer);
+
+// Make io accessible inside controllers via req.app.get('io')
 app.set('io', io);
 
-app.use(cors());
+// ── Middleware ──────────────────────────────────────────────
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true
+}));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// health check
-app.get('/', (req, res) => res.json({ message: 'Food Delivery API running ✅' }));
+// ── Routes ──────────────────────────────────────────────────
+app.use('/api/auth', require('./routes/auth.routes'));
+app.use('/api/restaurants', require('./routes/restaurant.routes'));
+app.use('/api/orders', require('./routes/order.routes'));
+app.use('/api/reviews', require('./routes/review.routes'));
+app.use('/api/menu', require('./routes/menu.routes'));
 
-// routes
-app.use('/api/auth',        authRoutes);
-app.use('/api/restaurants', restaurantRoutes);
-app.use('/api/menu',        menuRoutes);
-app.use('/api/orders',      orderRoutes);
-app.use('/api/reviews',     reviewRoutes);
+// ── Health check ────────────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
+
+// ── Error handler ───────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ msg: 'Internal server error', error: err.message });
+});
 
 const PORT = process.env.PORT || 5000;
-if (process.env.NODE_ENV !== 'test') {
-  httpServer.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-}
+httpServer.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
 
-// export app for testing
-module.exports = { app };
+// Export for testing
+module.exports = { app, httpServer };
