@@ -1,37 +1,50 @@
-Food Delivery App – Backend Architecture & Real-Time System
+# 🍔 Food Delivery App – Backend Architecture & Real-Time System
 
 A full-stack food delivery application focused on scalable backend architecture, real-time communication, geospatial restaurant search, and secure authentication.
 
 This project demonstrates how modern food delivery platforms work internally using technologies like MongoDB, Express.js, React, Socket.io, and JWT authentication.
 
-🚀 Features
-🔐 JWT Authentication & Authorization
-🧂 Password Hashing with bcrypt
-📍 Geospatial Restaurant Search using MongoDB
-🗺️ Nearby Restaurant Discovery with 2dsphere
-🛒 Smart Cart Management
-⚡ Real-Time Order Updates with Socket.io
-🍽️ Restaurant & Consumer Dashboards
-📦 MongoDB Atlas Cloud Database
-🔄 Context API State Management
-🌐 REST API Architecture
-📱 Responsive Frontend using React + Vite
-🏗️ Tech Stack
-Frontend
-React.js
-Vite
-Axios
-Context API
-Socket.io Client
-Backend
-Node.js
-Express.js
-MongoDB Atlas
-Mongoose
-JWT Authentication
-bcrypt
-Socket.io
-📂 Project Architecture
+---
+
+# 🚀 Features
+
+- 🔐 JWT Authentication & Authorization
+- 🧂 Password Hashing with bcrypt
+- 📍 Geospatial Restaurant Search using MongoDB
+- 🗺️ Nearby Restaurant Discovery with 2dsphere
+- 🛒 Smart Cart Management
+- ⚡ Real-Time Order Updates with Socket.io
+- 🍽️ Restaurant & Consumer Dashboards
+- 📦 MongoDB Atlas Cloud Database
+- 🔄 Context API State Management
+- 🌐 REST API Architecture
+- 📱 Responsive Frontend using React + Vite
+
+---
+
+# 🏗️ Tech Stack
+
+## Frontend
+- React.js
+- Vite
+- Axios
+- Context API
+- Socket.io Client
+
+## Backend
+- Node.js
+- Express.js
+- MongoDB Atlas
+- Mongoose
+- JWT Authentication
+- bcrypt
+- Socket.io
+
+---
+
+# 📂 Project Architecture
+
+
 food-delivery-app/
 │
 ├── client/                 # React Frontend
@@ -50,6 +63,7 @@ food-delivery-app/
 │
 ├── package.json
 └── README.md
+
 🔐 Authentication Flow
 JWT Authentication Process
 User registers or logs in.
@@ -85,6 +99,7 @@ Schema validation
 Cleaner data models
 Middleware support
 Better error handling
+
 📍 Geospatial Restaurant Search
 GeoJSON Format
 
@@ -234,12 +249,6 @@ Playwright End-to-End Testing
 Docker Deployment
 CI/CD Pipelines
 Monitoring & Logging
-📸 Reference Features
-Real-time order tracking
-Restaurant dashboards
-Nearby restaurant discovery
-Secure authentication system
-Live order updates
 💡 Key Learning Outcomes
 
 This project demonstrates:
@@ -269,6 +278,7 @@ Internship portfolios
 Full-stack developer resumes
 Backend engineering practice
 MERN stack learning
+
 🛠️ Installation
 Clone Repository
 git clone <your-repository-url>
@@ -276,14 +286,17 @@ Install Dependencies
 Backend
 cd server
 npm install
+
 Frontend
 cd client
 npm install
+
 ▶️ Run Project
 Start Backend
 npm run dev
 Start Frontend
 npm run dev
+
 📌 Environment Variables
 
 Create a .env file:
