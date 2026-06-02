@@ -1,48 +1,98 @@
 const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
 
 let io;
 
-/**
- * Initialize Socket.io server attached to the HTTP server.
- * 
- * HOW IT WORKS:
- * - Each order gets its own "room" (room name = orderId)
- * - Restaurant joins room: socket.join(`restaurant:${restaurantId}`)
- * - Consumer joins room: socket.join(`order:${orderId}`)
- * - Server emits to the correct room when status changes
- */
 const initSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
       origin: process.env.CLIENT_URL || 'http://localhost:5173',
-      methods: ['GET', 'POST'],
-      credentials: true
+      credentials: true,
+      methods: ['GET', 'POST']
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000
+  });
+
+  // JWT auth middleware for socket
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('Authentication error'));
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      socket.user = decoded;
+      next();
+    } catch {
+      next(new Error('Invalid token'));
     }
   });
 
   io.on('connection', (socket) => {
-    console.log(`Socket connected: ${socket.id}`);
+    const { id: userId, role } = socket.user;
+    console.log(`🔌 Socket connected: ${userId} (${role})`);
 
-    // Consumer or merchant joins a specific order room to track updates
-    socket.on('join:order', (orderId) => {
+    // ── Room management ──────────────────────────────────────────────
+    // Consumer joins their personal room
+    socket.join(`user:${userId}`);
+
+    // Restaurant owner joins their restaurant room
+    if (role === 'restaurant') {
+      socket.on('restaurant:join', (restaurantId) => {
+        socket.join(`restaurant:${restaurantId}`);
+        console.log(`🏪 Restaurant ${restaurantId} online`);
+      });
+    }
+
+    // Courier joins their own room
+    if (role === 'courier') {
+      socket.join(`courier:${userId}`);
+    }
+
+    // ── Live location updates ─────────────────────────────────────────
+    // Courier broadcasts real-time position
+    socket.on('courier:location', async ({ orderId, lat, lng, heading, speed }) => {
+      if (role !== 'courier') return;
+      const payload = { courierId: userId, orderId, lat, lng, heading, speed, ts: Date.now() };
+
+      // Broadcast to the consumer tracking this order
+      io.to(`order:${orderId}`).emit('location:update', payload);
+
+      // Also update in DB (throttled — handled in location controller via REST)
+    });
+
+    // Consumer subscribes to an order's live location
+    socket.on('order:track', (orderId) => {
       socket.join(`order:${orderId}`);
-      console.log(`Socket ${socket.id} joined room order:${orderId}`);
+      console.log(`📍 User ${userId} tracking order ${orderId}`);
     });
 
-    // Restaurant joins their own room to receive new order notifications
-    socket.on('join:restaurant', (restaurantId) => {
-      socket.join(`restaurant:${restaurantId}`);
-      console.log(`Socket ${socket.id} joined room restaurant:${restaurantId}`);
+    socket.on('order:untrack', (orderId) => {
+      socket.leave(`order:${orderId}`);
     });
 
-    // Merchant accepts/rejects an order
-    socket.on('order:accept', async (orderId) => {
-      // Notify the consumer their order is being prepared
-      io.to(`order:${orderId}`).emit('order:preparing', { orderId, status: 'preparing' });
+    // ── Order lifecycle events ────────────────────────────────────────
+    // order:placed       → emitted by server when order created
+    // order:accepted     → restaurant accepts
+    // order:preparing    → restaurant starts prep
+    // order:ready        → food ready for pickup
+    // order:courier_assigned → courier picked it up
+    // order:in_transit   → courier on the way
+    // order:arrived      → courier nearby
+    // order:delivered    → delivered
+
+    socket.on('order:accept', ({ orderId, restaurantId }) => {
+      if (role !== 'restaurant') return;
+      io.to(`order:${orderId}`).emit('order:accepted', { orderId, ts: Date.now() });
     });
 
-    socket.on('disconnect', () => {
-      console.log(`Socket disconnected: ${socket.id}`);
+    socket.on('order:reject', ({ orderId, reason }) => {
+      if (role !== 'restaurant') return;
+      io.to(`order:${orderId}`).emit('order:rejected', { orderId, reason, ts: Date.now() });
+    });
+
+    // ── Disconnect ────────────────────────────────────────────────────
+    socket.on('disconnect', (reason) => {
+      console.log(`🔌 Socket disconnected: ${userId} — ${reason}`);
     });
   });
 

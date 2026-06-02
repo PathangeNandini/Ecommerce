@@ -1,64 +1,27 @@
-const jwt = require("jsonwebtoken");
-const User = require("../models/User");
+const jwt = require('jsonwebtoken');
+const { User } = require('../models');
 
-/**
- * Middleware to verify JWT token from Authorization header.
- * Attaches decoded user payload to req.user.
- * Returns 401 if token is missing, malformed, or expired.
- */
 const protect = async (req, res, next) => {
-  let token;
-
-  // Check for Bearer token in Authorization header
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith("Bearer ")
-  ) {
-    token = req.headers.authorization.split(" ")[1];
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'No token provided' });
   }
-
-  if (!token) {
-    return res.status(401).json({ message: "Not authorized — no token provided" });
-  }
-
   try {
-    // Verify token signature and expiry
+    const token = auth.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Attach user to request (exclude password field)
-    req.user = await User.findById(decoded.id).select("-password");
-
-    if (!req.user) {
-      return res.status(401).json({ message: "Not authorized — user not found" });
-    }
-
+    req.user = await User.findById(decoded.id).select('-password');
+    if (!req.user) return res.status(401).json({ message: 'User not found' });
     next();
-  } catch (err) {
-    console.error("JWT verification failed:", err.message);
-    return res.status(401).json({ message: "Not authorized — token invalid or expired" });
+  } catch {
+    res.status(401).json({ message: 'Invalid or expired token' });
   }
 };
 
-/**
- * Middleware to restrict access to restaurant role only.
- * Must be used AFTER protect middleware.
- */
-const restaurantOnly = (req, res, next) => {
-  if (req.user && req.user.role === "restaurant") {
-    return next();
+const authorize = (...roles) => (req, res, next) => {
+  if (!roles.includes(req.user.role)) {
+    return res.status(403).json({ message: `Role '${req.user.role}' not authorized` });
   }
-  return res.status(403).json({ message: "Access denied — restaurant accounts only" });
+  next();
 };
 
-/**
- * Middleware to restrict access to courier role only.
- * Must be used AFTER protect middleware.
- */
-const courierOnly = (req, res, next) => {
-  if (req.user && req.user.role === "courier") {
-    return next();
-  }
-  return res.status(403).json({ message: "Access denied — courier accounts only" });
-};
-
-module.exports = { protect, restaurantOnly, courierOnly };
+module.exports = { protect, authorize };
