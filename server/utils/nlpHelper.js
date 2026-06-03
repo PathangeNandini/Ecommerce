@@ -1,37 +1,49 @@
-// server/utils/nlpHelper.js
-// Keyword suggestions based on order items — no external API needed
+const Anthropic = require('@anthropic-ai/sdk');
 
-const Order = require('../models/Order');
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const keywordBank = {
-  biryani:      ['aromatic', 'flavourful', 'well-spiced', 'tender meat', 'perfect rice'],
-  chicken:      ['juicy', 'well-cooked', 'tender', 'spicy', 'finger-licking'],
-  mutton:       ['tender', 'rich gravy', 'well-marinated', 'flavourful', 'slow-cooked'],
-  pizza:        ['crispy crust', 'cheesy', 'generous toppings', 'well-baked', 'tasty sauce'],
-  dosa:         ['crispy', 'golden', 'thin', 'well-fermented', 'served hot'],
-  idli:         ['soft', 'fluffy', 'fresh', 'light', 'good chutney'],
-  vada:         ['crispy outside', 'soft inside', 'hot', 'fresh', 'well-fried'],
-  coffee:       ['strong', 'aromatic', 'perfect blend', 'hot', 'refreshing'],
-  default:      ['fresh', 'tasty', 'good portion', 'value for money', 'would recommend']
-};
-
-const suggestKeywords = async (orderId) => {
+/**
+ * Use Claude to suggest review keywords based on what was ordered.
+ *
+ * @param {string} itemNames - Comma-separated list of ordered item names
+ *                             e.g. "Butter Chicken, Garlic Naan, Mango Lassi"
+ * @returns {Promise<string[]>} Array of 5 keyword suggestions
+ */
+async function suggestKeywords(itemNames) {
   try {
-    const order = await Order.findById(orderId);
-    if (!order) return keywordBank.default;
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001', // fast and cheap for this task
+      max_tokens: 100,
+      messages: [
+        {
+          role: 'user',
+          content:
+            `Suggest exactly 5 specific food review keywords for someone who ordered: ${itemNames}. ` +
+            `Reply with only a JSON array of strings. No explanation. Example: ["crispy","spicy","generous portions","fresh","aromatic"]`
+        }
+      ]
+    });
 
-    const itemNames = order.items.map(i => i.name.toLowerCase()).join(' ');
+    const raw = message.content[0]?.text?.trim() || '[]';
 
-    for (const [key, keywords] of Object.entries(keywordBank)) {
-      if (key !== 'default' && itemNames.includes(key)) {
-        return keywords;
-      }
-    }
+    // Strip any markdown fences if the model wraps in ```json
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
 
-    return keywordBank.default;
+    if (!Array.isArray(parsed)) return getFallbackKeywords();
+    return parsed.slice(0, 5); // enforce max 5
   } catch (err) {
-    return keywordBank.default;
+    console.error('suggestKeywords error:', err.message);
+    // Return safe fallback so the review page still works
+    return getFallbackKeywords();
   }
-};
+}
+
+/**
+ * Fallback keywords when AI is unavailable or API key is not set.
+ */
+function getFallbackKeywords() {
+  return ['fresh', 'flavourful', 'generous portions', 'well-packed', 'hot on arrival'];
+}
 
 module.exports = { suggestKeywords };

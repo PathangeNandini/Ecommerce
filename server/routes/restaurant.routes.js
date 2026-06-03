@@ -9,6 +9,7 @@ const {
 
 const {
   protect,
+  authorize,
   restaurantOnly
 } = require('../middleware/authMiddleware');
 
@@ -17,6 +18,6 @@ router.get('/nearby', getNearby);
 router.get('/:id', getById);
 
 // Protected — restaurant role only
-router.post('/', protect, restaurantOnly, create);
+router.post('/', protect, authorize('restaurant'), create);
 
 module.exports = router;
