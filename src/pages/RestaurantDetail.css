@@ -1,0 +1,210 @@
+/* RestaurantDetail.css */
+.detail-page {
+  min-height: 100vh;
+  background: #0f0f0f;
+  color: #f5f5f5;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.detail-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  color: #888;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  position: sticky;
+  top: 0;
+  background: rgba(15,15,15,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #2a2a2a;
+  z-index: 100;
+}
+
+.back-btn {
+  background: transparent;
+  border: 1px solid #2a2a2a;
+  color: #888;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  transition: color 0.2s, border-color 0.2s;
+}
+.back-btn:hover { color: #f5f5f5; border-color: #f5f5f5; }
+
+.cart-float-btn {
+  background: #e8450a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  position: relative;
+}
+
+.cart-badge {
+  background: #fff;
+  color: #e8450a;
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-left: 0.3rem;
+}
+
+.detail-hero {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 2rem;
+  border-bottom: 1px solid #2a2a2a;
+  background: radial-gradient(ellipse at 50% -20%, rgba(232,69,10,0.08) 0%, transparent 70%);
+}
+
+.detail-hero-icon {
+  font-size: 3.5rem;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.detail-hero-info h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+}
+
+.detail-meta {
+  display: flex;
+  gap: 1.25rem;
+  color: #888;
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.category-tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid #2a2a2a;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.category-tabs::-webkit-scrollbar { display: none; }
+
+.cat-tab {
+  background: transparent;
+  border: 1px solid #2a2a2a;
+  color: #888;
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.cat-tab:hover { border-color: #e8450a; color: #f5f5f5; }
+.cat-tab.active { background: #e8450a; border-color: #e8450a; color: #fff; }
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.menu-card {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s;
+}
+.menu-card:hover:not(.unavailable) { border-color: #e8450a; }
+.menu-card.unavailable { opacity: 0.5; }
+
+.menu-card-img {
+  height: 120px;
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  opacity: 0.3;
+}
+
+.menu-card-body {
+  padding: 1rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-card-body h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.menu-desc {
+  color: #888;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  flex: 1;
+  margin-bottom: 1rem;
+}
+
+.menu-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.menu-price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e8450a;
+}
+
+.add-btn {
+  background: #e8450a;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s;
+}
+.add-btn:hover { background: #c13a08; }
+
+.unavail-label {
+  font-size: 0.75rem;
+  color: #666;
+}
