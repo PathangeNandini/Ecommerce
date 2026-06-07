@@ -7,52 +7,67 @@ export function CartProvider({ children }) {
   const [restaurantId, setRestaurantId] = useState(null);
   const [restaurantName, setRestaurantName] = useState("");
 
-  // useRef to always have the latest restaurantId without stale closure
   const restaurantIdRef = useRef(null);
 
-  const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const total = items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
 
   const addItem = useCallback((item, restId, restName) => {
     const currentRestId = restaurantIdRef.current;
 
+    // Different restaurant detected
     if (currentRestId && currentRestId !== restId) {
-      const confirmed = window.confirm(
-        "Your cart has items from another restaurant. Clear cart and add this item?"
-      );
-      if (!confirmed) return false;
-      setItems([]);
+      return "CONFLICT";
     }
 
-    // Update both state and ref
     restaurantIdRef.current = restId;
     setRestaurantId(restId);
     setRestaurantName(restName);
 
     setItems((prev) => {
-      // If switching restaurant, start fresh
-      const base = currentRestId && currentRestId !== restId ? [] : prev;
-      const existing = base.find((i) => i._id === item._id);
+      const existing = prev.find((i) => i._id === item._id);
+
       if (existing) {
-        return base.map((i) =>
-          i._id === item._id ? { ...i, quantity: i.quantity + 1 } : i
+        return prev.map((i) =>
+          i._id === item._id
+            ? { ...i, quantity: i.quantity + 1 }
+            : i
         );
       }
-      return [...base, { ...item, quantity: 1 }];
+
+      return [...prev, { ...item, quantity: 1 }];
     });
 
     return true;
-  }, []); // empty deps — uses ref instead of closure
+  }, []);
+
+  // Called after the user confirms switching restaurants — clears the old
+  // cart and adds the new item in one shot, no conflict check needed.
+  const forceAddItem = useCallback((item, restId, restName) => {
+    restaurantIdRef.current = restId;
+    setRestaurantId(restId);
+    setRestaurantName(restName);
+    setItems([{ ...item, quantity: 1 }]);
+  }, []);
 
   const removeItem = useCallback((itemId) => {
     setItems((prev) => {
       const updated = prev
-        .map((i) => (i._id === itemId ? { ...i, quantity: i.quantity - 1 } : i))
+        .map((i) =>
+          i._id === itemId
+            ? { ...i, quantity: i.quantity - 1 }
+            : i
+        )
         .filter((i) => i.quantity > 0);
+
       if (updated.length === 0) {
         restaurantIdRef.current = null;
         setRestaurantId(null);
         setRestaurantName("");
       }
+
       return updated;
     });
   }, []);
@@ -65,7 +80,19 @@ export function CartProvider({ children }) {
   }, []);
 
   return (
-    <CartContext.Provider value={{ items, restaurantId, restaurantName, total, addItem, removeItem, clearCart }}>
+    <CartContext.Provider
+      value={{
+        items,
+        restaurantId,
+        restaurantName,
+        restaurantIdRef,
+        total,
+        addItem,
+        forceAddItem,
+        removeItem,
+        clearCart,
+      }}
+    >
       {children}
     </CartContext.Provider>
   );
