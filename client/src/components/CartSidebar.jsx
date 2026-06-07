@@ -3,7 +3,7 @@ import { useCart } from "../context/CartContext";
 import "./CartSidebar.css";
 
 export default function CartSidebar({ isOpen, onClose }) {
-  const { items, restaurantName, total, addItem, removeItem, clearCart } = useCart();
+  const { items, restaurantId, restaurantName, total, addItem, removeItem, clearCart } = useCart();
   const navigate = useNavigate();
 
   const handleCheckout = () => {
@@ -42,7 +42,8 @@ export default function CartSidebar({ isOpen, onClose }) {
                   <div className="cart-item-qty">
                     <button className="qty-btn" onClick={() => removeItem(item._id)}>−</button>
                     <span>{item.quantity}</span>
-                    <button className="qty-btn" onClick={() => addItem(item, null, restaurantName)}>+</button>
+                    {/* ← FIX: pass restaurantId instead of null */}
+                    <button className="qty-btn" onClick={() => addItem(item, restaurantId, restaurantName)}>+</button>
                   </div>
                 </div>
               ))}
