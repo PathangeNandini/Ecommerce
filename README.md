@@ -1,307 +1,256 @@
-# 🍔 Food Delivery App – Backend Architecture & Real-Time System
+# 🍔 FoodRush – Food Delivery Platform
 
-A full-stack food delivery application focused on scalable backend architecture, real-time communication, geospatial restaurant search, and secure authentication.
+A full-stack food delivery application built with the MERN stack, featuring real-time order updates, geospatial restaurant search, role-based dashboards, and a smart cart system.
 
-This project demonstrates how modern food delivery platforms work internally using technologies like MongoDB, Express.js, React, Socket.io, and JWT authentication.
+This project demonstrates how modern food delivery platforms work internally using MongoDB, Express.js, React, Socket.io, and JWT authentication.
 
 ---
 
-# 🚀 Features
+## 🚀 Features
 
-- 🔐 JWT Authentication & Authorization
+- 🔐 JWT Authentication & Role-Based Authorization
 - 🧂 Password Hashing with bcrypt
-- 📍 Geospatial Restaurant Search using MongoDB
-- 🗺️ Nearby Restaurant Discovery with 2dsphere
-- 🛒 Smart Cart Management
+- 📍 Geospatial Restaurant Search using MongoDB 2dsphere
+- 🗺️ Nearby Restaurant Discovery with distance calculation
+- 🛒 Smart Cart Management with conflict detection
 - ⚡ Real-Time Order Updates with Socket.io
-- 🍽️ Restaurant & Consumer Dashboards
+- 🍽️ Consumer, Merchant & Courier Dashboards
 - 📦 MongoDB Atlas Cloud Database
 - 🔄 Context API State Management
 - 🌐 REST API Architecture
-- 📱 Responsive Frontend using React + Vite
+- 📱 Fully Responsive Frontend using React + Vite
 
 ---
 
-# 🏗️ Tech Stack
+## 🏗️ Tech Stack
 
-## Frontend
-- React.js
-- Vite
+### Frontend
+- React.js + Vite
 - Axios
 - Context API
 - Socket.io Client
+- React Router DOM
 
-## Backend
-- Node.js
-- Express.js
-- MongoDB Atlas
-- Mongoose
+### Backend
+- Node.js + Express.js
+- MongoDB Atlas + Mongoose
 - JWT Authentication
 - bcrypt
 - Socket.io
 
 ---
 
-# 📂 Project Architecture
+## 📂 Project Structure
 
-
+```
 food-delivery-app/
 │
-├── client/                 # React Frontend
-│   ├── src/
-│   ├── components/
-│   ├── pages/
-│   └── context/
+├── client/                   # React Frontend
+│   └── src/
+│       ├── components/       # Navbar, CartSidebar
+│       ├── context/          # AuthContext, CartContext
+│       └── pages/
+│           ├── consumer/     # Home, RestaurantDetail, Cart, Orders
+│           ├── merchant/     # ManageMenu, ManageOrders, Owner Dashboard
+│           └── courier/      # DeliveryHome, ActiveDelivery, DeliveryHistory
 │
-├── server/                 # Express Backend
-│   ├── controllers/
-│   ├── routes/
-│   ├── middleware/
-│   ├── models/
-│   ├── sockets/
-│   └── config/
+├── server/                   # Express Backend
+│   ├── controllers/          # auth, restaurant, order, menu
+│   ├── routes/               # auth, restaurant, order, menu routes
+│   ├── middleware/           # authMiddleware (JWT verification)
+│   ├── models/               # User, Restaurant, MenuItem, Order
+│   ├── config/               # db.js, socket.js
+│   └── seed.js               # 50 restaurants × 12 menu items
 │
-├── package.json
 └── README.md
+```
 
-🔐 Authentication Flow
-JWT Authentication Process
-User registers or logs in.
-Password is hashed using bcrypt.
-Backend generates a JWT token.
-Frontend stores the token.
-Token is attached to protected API requests.
-Middleware verifies the token before access.
-👤 User Roles
+---
 
-The application supports multiple user roles:
+## 👤 User Roles
 
-Consumer → Places food orders
-Restaurant → Manages menu & orders
-Courier → Handles delivery tracking
+| Role | Access |
+|------|--------|
+| Consumer | Browse restaurants, manage cart, place & track orders |
+| Restaurant Owner | Manage menu items, view & update incoming orders |
+| Courier | View assigned deliveries, update delivery status |
 
-Role-based access helps secure dashboards and APIs.
+Role-based middleware secures all dashboards and API endpoints.
 
-🗄️ MongoDB & Mongoose
-Why MongoDB?
+---
 
-MongoDB is used because food delivery applications contain:
+## 🔐 Authentication Flow
 
-Flexible menu structures
-Nested reviews
-Dynamic order data
-Location-based searches
-Why Mongoose?
+1. User registers or logs in
+2. Password is hashed using bcrypt before storage
+3. Backend generates a signed JWT token on success
+4. Frontend stores the token and attaches it to all protected requests
+5. `verifyToken` middleware validates the token before granting access
 
-Mongoose provides:
+---
 
-Schema validation
-Cleaner data models
-Middleware support
-Better error handling
+## 📍 Geospatial Restaurant Search
 
-📍 Geospatial Restaurant Search
-GeoJSON Format
+Restaurant locations are stored as GeoJSON points:
 
-Restaurant locations are stored using GeoJSON:
-
+```js
 location: {
   type: "Point",
-  coordinates: [longitude, latitude]
+  coordinates: [longitude, latitude]  // ⚠️ longitude first
 }
+```
 
-⚠️ Coordinate order is important.
+A `2dsphere` index enables fast location-based queries:
 
-Correct:
-
-[longitude, latitude]
-
-Wrong order may place restaurants in incorrect locations.
-
-🌍 2dsphere Index
-
-MongoDB uses a 2dsphere index for fast location-based queries.
-
+```js
 restaurantSchema.index({ location: "2dsphere" });
+```
 
-This enables:
+The `$geoNear` aggregation stage powers nearby search with distance calculation, radius filtering, cuisine filters, rating filters, and pagination.
 
-Nearby restaurant search
-Distance calculation
-Radius filtering
-🔎 $geoNear Aggregation
+---
 
-MongoDB’s $geoNear aggregation stage is used to:
+## 🛒 Cart System
 
-Find nearby restaurants
-Calculate distances
-Sort results
-Apply filters
-Support pagination
+The cart prevents ordering from multiple restaurants simultaneously to avoid delivery confusion and order mismatches.
 
-Example:
+- `CartContext` uses `useRef` to track `restaurantId` without stale closures
+- When a user adds an item from a different restaurant, a custom conflict modal appears
+- `forceAddItem` clears the existing cart and starts a new one on confirmation
+- Total price is calculated dynamically on both frontend and backend
 
-{
-  $geoNear: {
-    near: {
-      type: "Point",
-      coordinates: [lng, lat]
-    },
-    distanceField: "distance",
-    maxDistance: 5000,
-    spherical: true
-  }
-}
+---
 
-📌 MongoDB stores distances in meters.
+## ⚡ Real-Time Order Updates (Socket.io)
 
-🛒 Cart Logic
+```
+Consumer places order → Restaurant receives instant notification
+Restaurant updates status → Consumer sees live status change
+```
 
-The cart system prevents users from ordering from multiple restaurants at the same time.
-
-Why?
-
-This avoids:
-
-Delivery confusion
-Order mismatch
-Incorrect pricing
-
-Total price is dynamically calculated to maintain consistency.
-
-⚡ Socket.io Real-Time Updates
-Order Flow
-Consumer places an order
-Restaurant receives update instantly
-Restaurant accepts/rejects order
-Consumer receives live status updates
+Socket.io rooms are used per order and per restaurant:
+- `restaurant:{id}` — notifies owner of new orders
+- `order:{id}` — pushes status updates to the consumer
 
 No page refresh required.
 
-🔄 Why Socket.io?
+---
 
-Socket.io is used instead of polling because it provides:
+## 🌐 API Routes
 
-Faster communication
-Lower server load
-Real-time bidirectional updates
-Better user experience
-🌐 API Architecture
+### Auth
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/api/auth/register` | Register new user |
+| POST | `/api/auth/login` | Login and receive JWT |
 
-The backend follows REST API principles.
+### Restaurants
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/restaurants/nearby` | Find restaurants by location |
+| GET | `/api/restaurants/:id` | Get restaurant + menu items |
 
-Example Routes
-Authentication
-POST /api/auth/register
-POST /api/auth/login
-Restaurants
-GET /api/restaurants/nearby
-GET /api/restaurants/:id
-Orders
-POST /api/orders
-GET /api/orders/my-orders
-PATCH /api/orders/:id/status
-🔒 Middleware Protection
+### Orders
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/api/orders` | Place a new order |
+| GET | `/api/orders/my` | Get current user's orders |
+| PATCH | `/api/orders/:id/status` | Update order status |
 
-Protected routes use authentication middleware:
+---
 
-verifyToken(req, res, next)
+## 🗄️ Database Models
 
-This ensures only authorized users can access secure endpoints.
+- **User** — name, email, password (hashed), role
+- **Restaurant** — name, cuisine, address, location (GeoJSON), rating, ownerId
+- **MenuItem** — name, description, price, category, available, restaurantId
+- **Order** — userId, restaurantId, items (snapshot), totalPrice, status, deliveryAddress
 
-☁️ MongoDB Atlas Setup
-Create MongoDB Atlas cluster
-Add IP whitelist
-Create database user
-Copy connection string
-Store in .env
+---
 
-Example:
+## 🛠️ Installation & Setup
 
-MONGO_URI=your_mongodb_connection
-JWT_SECRET=your_secret_key
-🧪 Seed Data
-
-Real restaurant coordinates from Google Maps are recommended for testing.
-
-Using fake coordinates may produce incorrect search results.
-
-🧠 State Management
-Context API
-
-Used for:
-
-Authentication state
-Cart state
-Shared application data
-
-This avoids unnecessary prop drilling.
-
-🚀 Production-Grade Improvements
-
-Future enhancements include:
-
-Refresh Tokens
-Redis Caching
-Payment Gateway Integration
-Courier Live Tracking using Leaflet.js
-Playwright End-to-End Testing
-Docker Deployment
-CI/CD Pipelines
-Monitoring & Logging
-💡 Key Learning Outcomes
-
-This project demonstrates:
-
-Backend architecture design
-JWT authentication systems
-MongoDB geospatial queries
-Real-time systems with Socket.io
-State management concepts
-Scalable API development
-Production-level thinking
-⭐ Why This Project Matters
-
-This is more than a CRUD application.
-
-It demonstrates understanding of:
-
-Real-world system design
-Authentication workflows
-Geospatial indexing
-Real-time communication
-Scalable backend architecture
-
-Perfect for:
-
-Internship portfolios
-Full-stack developer resumes
-Backend engineering practice
-MERN stack learning
-
-🛠️ Installation
-Clone Repository
+### 1. Clone the repository
+```bash
 git clone <your-repository-url>
-Install Dependencies
-Backend
+cd food-delivery-app
+```
+
+### 2. Install dependencies
+
+```bash
+# Backend
 cd server
 npm install
 
-Frontend
-cd client
+# Frontend
+cd ../client
 npm install
+```
 
-▶️ Run Project
-Start Backend
-npm run dev
-Start Frontend
-npm run dev
+### 3. Configure environment variables
 
-📌 Environment Variables
+Create a `.env` file inside the `server/` folder:
 
-Create a .env file:
-
+```env
 PORT=5000
-MONGO_URI=your_mongodb_uri
-JWT_SECRET=your_secret
+MONGO_URI=your_mongodb_atlas_uri
+JWT_SECRET=your_secret_key
 CLIENT_URL=http://localhost:5173
+```
+
+### 4. Seed the database
+
+```bash
+cd server
+node seed.js
+```
+
+This creates 50 restaurants across Chennai with 600 menu items and test accounts:
+- **Customer:** customer@test.com / password123
+- **Owner:** owner@test.com / password123
+
+### 5. Run the project
+
+```bash
+# Start backend (from /server)
+npm run dev
+
+# Start frontend (from /client)
+npm run dev
+```
+
+Frontend runs on `http://localhost:5173` — Backend runs on `http://localhost:5000`
+
+---
+
+## 🚀 Production-Grade Future Improvements
+
+- Refresh token rotation
+- Redis caching for restaurant listings
+- Payment gateway integration
+- Courier live tracking with Leaflet.js
+- Docker deployment + CI/CD pipelines
+- End-to-end testing with Playwright
+- Monitoring & logging (Winston + Sentry)
+
+---
+
+## 💡 Key Learning Outcomes
+
+- Backend architecture design with Express.js
+- JWT authentication and role-based access control
+- MongoDB geospatial indexing and aggregation pipelines
+- Real-time bidirectional communication with Socket.io
+- React Context API for global state management
+- Debugging stale closures in React hooks
+- End-to-end order flow from cart to delivery
+
+---
+
+## 🧪 Test Accounts
+
+| Role | Email | Password |
+|------|-------|----------|
+| Consumer | customer@test.com | password123 |
+| Owner | owner@test.com | password123 |
