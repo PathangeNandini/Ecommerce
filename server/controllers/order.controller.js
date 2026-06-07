@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const MenuItem = require('../models/MenuItem');
 const User = require('../models/User');
+const mongoose = require('mongoose');
 
 /**
  * POST /api/orders
@@ -10,19 +11,28 @@ exports.placeOrder = async (req, res) => {
   try {
     const { restaurantId, items, deliveryAddress } = req.body;
 
+    // Validate restaurantId exists and is valid
+    if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return res.status(400).json({ msg: 'Invalid or missing restaurantId' });
+    }
+
     if (!items || items.length === 0) {
       return res.status(400).json({ msg: 'Cart is empty' });
     }
 
-    // Fetch menu items from DB — removed restaurantId filter to avoid mismatch
     const menuItemIds = items.map(i => i.menuItemId || i._id);
+
+    // Validate items belong to the correct restaurant
     const dbItems = await MenuItem.find({
       _id: { $in: menuItemIds },
+      restaurantId: restaurantId,   // ← KEY FIX: ensures items match restaurant
       available: true
     });
 
     if (dbItems.length !== items.length) {
-      return res.status(400).json({ msg: 'Some items are unavailable or not found' });
+      return res.status(400).json({
+        msg: 'Some items are unavailable, not found, or do not belong to this restaurant'
+      });
     }
 
     // Build order items with server-side pricing
