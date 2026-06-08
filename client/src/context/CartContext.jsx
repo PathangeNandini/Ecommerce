@@ -4,59 +4,55 @@ const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState([]);
-  const [restaurantId, setRestaurantId] = useState(null);
-  const [restaurantName, setRestaurantName] = useState("");
+  const [restaurants, setRestaurants] = useState({}); // { restId: restName }
 
   const restaurantIdRef = useRef(null);
 
-  const total = items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
+  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // For backward compat — last added restaurant
+  const restaurantId = items.length > 0 ? items[items.length - 1].restId : null;
+  const restaurantName = restaurantId ? restaurants[restaurantId] : "";
 
   const addItem = useCallback((item, restId, restName) => {
-    const currentRestId = restaurantIdRef.current;
-
-    // Different restaurant detected
-    if (currentRestId && currentRestId !== restId) {
-      return "CONFLICT";
-    }
-
-    restaurantIdRef.current = restId;
-    setRestaurantId(restId);
-    setRestaurantName(restName);
+    // Save restaurant name
+    setRestaurants((prev) => ({ ...prev, [restId]: restName }));
 
     setItems((prev) => {
-      const existing = prev.find((i) => i._id === item._id);
-
+      const existing = prev.find((i) => i._id === item._id && i.restId === restId);
       if (existing) {
         return prev.map((i) =>
-          i._id === item._id
+          i._id === item._id && i.restId === restId
             ? { ...i, quantity: i.quantity + 1 }
             : i
         );
       }
-
-      return [...prev, { ...item, quantity: 1 }];
+      return [...prev, { ...item, restId, quantity: 1 }];
     });
 
     return true;
   }, []);
 
-  // Called after the user confirms switching restaurants — clears the old
-  // cart and adds the new item in one shot, no conflict check needed.
   const forceAddItem = useCallback((item, restId, restName) => {
-    restaurantIdRef.current = restId;
-    setRestaurantId(restId);
-    setRestaurantName(restName);
-    setItems([{ ...item, quantity: 1 }]);
+    setRestaurants((prev) => ({ ...prev, [restId]: restName }));
+    setItems((prev) => {
+      const existing = prev.find((i) => i._id === item._id && i.restId === restId);
+      if (existing) {
+        return prev.map((i) =>
+          i._id === item._id && i.restId === restId
+            ? { ...i, quantity: i.quantity + 1 }
+            : i
+        );
+      }
+      return [...prev, { ...item, restId, quantity: 1 }];
+    });
   }, []);
 
-  const removeItem = useCallback((itemId) => {
+  const removeItem = useCallback((itemId, restId) => {
     setItems((prev) => {
       const updated = prev
         .map((i) =>
-          i._id === itemId
+          i._id === itemId && i.restId === restId
             ? { ...i, quantity: i.quantity - 1 }
             : i
         )
@@ -64,8 +60,7 @@ export function CartProvider({ children }) {
 
       if (updated.length === 0) {
         restaurantIdRef.current = null;
-        setRestaurantId(null);
-        setRestaurantName("");
+        setRestaurants({});
       }
 
       return updated;
@@ -75,14 +70,29 @@ export function CartProvider({ children }) {
   const clearCart = useCallback(() => {
     restaurantIdRef.current = null;
     setItems([]);
-    setRestaurantId(null);
-    setRestaurantName("");
+    setRestaurants({});
   }, []);
+
+  // Group items by restaurant for checkout
+  const itemsByRestaurant = Object.entries(
+    items.reduce((acc, item) => {
+      if (!acc[item.restId]) acc[item.restId] = [];
+      acc[item.restId].push(item);
+      return acc;
+    }, {})
+  ).map(([restId, restItems]) => ({
+    restaurantId: restId,
+    restaurantName: restaurants[restId] || "",
+    items: restItems,
+    total: restItems.reduce((s, i) => s + i.price * i.quantity, 0),
+  }));
 
   return (
     <CartContext.Provider
       value={{
         items,
+        restaurants,
+        itemsByRestaurant,
         restaurantId,
         restaurantName,
         restaurantIdRef,
