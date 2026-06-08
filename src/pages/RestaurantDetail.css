@@ -321,3 +321,107 @@
   .menu-grid { padding: 1rem; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   .menu-card-img { height: 120px; }
 }
+
+/* ── CONFLICT MODAL ── */
+.conflict-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.conflict-modal {
+  background: #1c1c1c;
+  border: 1px solid #333;
+  border-radius: 20px;
+  padding: 2rem 2rem 1.75rem;
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.conflict-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.conflict-modal h3 {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #f0f0f0;
+  letter-spacing: -0.02em;
+}
+
+.conflict-modal p {
+  color: #888;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-width: 300px;
+}
+
+.conflict-modal strong {
+  color: #f0f0f0;
+  font-weight: 600;
+}
+
+.conflict-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.conflict-confirm {
+  background: #ff4d00;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 0.85rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s, transform 0.1s;
+  width: 100%;
+}
+.conflict-confirm:hover  { background: #e84400; }
+.conflict-confirm:active { transform: scale(0.98); }
+
+.conflict-cancel {
+  background: transparent;
+  border: 1px solid #333;
+  color: #888;
+  border-radius: 12px;
+  padding: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  width: 100%;
+}
+.conflict-cancel:hover { border-color: #555; color: #f0f0f0; }
