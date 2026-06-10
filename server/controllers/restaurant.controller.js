@@ -4,21 +4,22 @@ const MenuItem = require('../models/MenuItem');
 /** GET /api/restaurants/nearby */
 exports.getNearby = async (req, res) => {
   try {
-    const { lat, lng, radius = 500, cuisine, minRating, page = 0 } = req.query;
+    const { lat, lng, radius = 5, cuisine, minRating, page = 0 } = req.query;
 
     if (!lat || !lng)
       return res.status(400).json({ msg: 'Latitude and longitude are required' });
 
     const limit = 8;
     const skip = parseInt(page) * limit;
+    const maxDistance = parseFloat(radius) * 1000; // convert km to metres
 
     const geoNearStage = {
       $geoNear: {
         near: { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
         distanceField: 'distance',
-        maxDistance: parseFloat(radius) * 1000,
-        spherical: true
-      }
+        maxDistance,
+        spherical: true,
+      },
     };
 
     const matchFilters = { isOpen: true };
@@ -28,14 +29,48 @@ exports.getNearby = async (req, res) => {
     const pipeline = [
       geoNearStage,
       { $match: matchFilters },
-      { $sort: { distance: 1 } },
+
+      // Combined score: 60% proximity + 40% rating
+      {
+        $addFields: {
+          distanceKm: { $round: [{ $divide: ['$distance', 1000] }, 1] },
+          normalizedDistance: {
+            $subtract: [1, { $divide: ['$distance', maxDistance] }],
+          },
+          normalizedRating: { $divide: [{ $ifNull: ['$rating', 0] }, 5] },
+        },
+      },
+      {
+        $addFields: {
+          score: {
+            $add: [
+              { $multiply: ['$normalizedDistance', 0.6] },
+              { $multiply: ['$normalizedRating',   0.4] },
+            ],
+          },
+        },
+      },
+
+      { $sort: { score: -1 } },
       { $skip: skip },
       { $limit: limit },
-      { $addFields: { distanceKm: { $round: [{ $divide: ['$distance', 1000] }, 1] } } }
+
+      // Remove internal scoring fields from response
+      {
+        $project: {
+          normalizedDistance: 0,
+          normalizedRating: 0,
+        },
+      },
     ];
 
     const restaurants = await Restaurant.aggregate(pipeline);
-    res.json({ results: restaurants, page: parseInt(page), count: restaurants.length, hasMore: restaurants.length === limit });
+    res.json({
+      results: restaurants,
+      page: parseInt(page),
+      count: restaurants.length,
+      hasMore: restaurants.length === limit,
+    });
   } catch (err) {
     console.error('Restaurant fetch error:', err);
     res.status(500).json({ msg: err.message });
@@ -81,7 +116,7 @@ exports.create = async (req, res) => {
     const restaurant = await Restaurant.create({
       name, cuisine, address,
       location: { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
-      ownerId: req.user.id
+      ownerId: req.user.id,
     });
     res.status(201).json(restaurant);
   } catch (err) { res.status(500).json({ msg: err.message }); }

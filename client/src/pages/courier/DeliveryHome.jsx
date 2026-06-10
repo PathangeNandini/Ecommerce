@@ -12,14 +12,19 @@ export default function DeliveryHome() {
   const [loading, setLoading]     = useState(true);
   const [accepting, setAccepting] = useState(null);
   const [online, setOnline]       = useState(true);
+  const [earnings, setEarnings]   = useState({
+    today: 0, week: 0, totalDeliveries: 0, todayDeliveries: 0,
+  });
 
   useEffect(() => {
     Promise.all([
       api.get("/orders/available-deliveries"),
       api.get("/orders/my-deliveries"),
-    ]).then(([avail, mine]) => {
+      api.get("/orders/my-earnings"),
+    ]).then(([avail, mine, earn]) => {
       setOrders(Array.isArray(avail.data) ? avail.data : []);
       setMyOrders(Array.isArray(mine.data) ? mine.data : []);
+      setEarnings(earn.data ?? { today: 0, week: 0, totalDeliveries: 0, todayDeliveries: 0 });
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -63,7 +68,29 @@ export default function DeliveryHome() {
 
       <div className="courier-content">
 
-        {/* Active Deliveries */}
+        {/* ── Earnings Tracker ── */}
+        <section className="courier-section">
+          <h2>💰 Your Earnings</h2>
+          <div className="earnings-grid">
+            <div className="earnings-card primary">
+              <div className="earnings-value">₹{earnings.today?.toFixed(0)}</div>
+              <div className="earnings-label">Today's Earnings</div>
+              <div className="earnings-sub">{earnings.todayDeliveries} deliveries</div>
+            </div>
+            <div className="earnings-card">
+              <div className="earnings-value">₹{earnings.week?.toFixed(0)}</div>
+              <div className="earnings-label">This Week</div>
+              <div className="earnings-sub">Last 7 days</div>
+            </div>
+            <div className="earnings-card">
+              <div className="earnings-value">{earnings.totalDeliveries}</div>
+              <div className="earnings-label">Total Deliveries</div>
+              <div className="earnings-sub">All time</div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Active Deliveries ── */}
         {myOrders.length > 0 && (
           <section className="courier-section">
             <h2>🚚 My Active Deliveries</h2>
@@ -96,7 +123,7 @@ export default function DeliveryHome() {
           </section>
         )}
 
-        {/* Available Deliveries */}
+        {/* ── Available Deliveries ── */}
         <section className="courier-section">
           <h2>
             📦 Available Deliveries
@@ -140,6 +167,7 @@ export default function DeliveryHome() {
             </div>
           )}
         </section>
+
       </div>
     </div>
   );

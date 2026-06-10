@@ -4,7 +4,7 @@ import api from "../../services/api";
 import { useSocket } from "../../hooks/useSocket";
 import "./Owner.css";
 
-/* ── Inline SVG icons (no external dep needed) ── */
+/* ── Inline SVG icons ── */
 const IconDashboard = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -57,6 +57,35 @@ const fmtDate = () =>
 const fmtTime = (iso) =>
   new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
+/* ── Revenue Bar Chart (no external lib) ── */
+function RevenueChart({ data }) {
+  if (!data || data.length === 0) return null;
+  const maxVal = Math.max(...data.map((d) => d.total), 1);
+
+  return (
+    <div className="revenue-chart">
+      <div className="chart-bars">
+        {data.map((d, i) => (
+          <div key={i} className="chart-bar-col">
+            <div className="chart-bar-wrap">
+              <div
+                className="chart-bar-fill"
+                style={{ height: `${(d.total / maxVal) * 100}%` }}
+              >
+                {d.total > 0 && (
+                  <span className="chart-bar-tooltip">₹{d.total.toFixed(0)}</span>
+                )}
+              </div>
+            </div>
+            <div className="chart-bar-label">{d.label.split(",")[0]}</div>
+            <div className="chart-bar-orders">{d.orderCount} orders</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function OwnerDashboard() {
   const socket   = useSocket();
   const navigate = useNavigate();
@@ -64,6 +93,9 @@ export default function OwnerDashboard() {
   const [stats, setStats]           = useState({ revenue: 0, orders: 0, pending: 0 });
   const [pendingOrders, setPending] = useState([]);
   const [restaurant, setRestaurant] = useState(null);
+  const [revenueData, setRevenueData] = useState([]);
+  const [weekTotal, setWeekTotal]   = useState(0);
+  const [weekOrders, setWeekOrders] = useState(0);
   const [loading, setLoading]       = useState(true);
 
   /* ── Fetch on mount ── */
@@ -75,11 +107,19 @@ export default function OwnerDashboard() {
     ])
       .then(([rev, pend, rest]) => {
         const pending = pend.data ?? [];
+
+        // Today's stats (first item in last7Days = 6 days ago, last = today)
+        const last7 = rev.data?.last7Days ?? [];
+        const today = last7[last7.length - 1] ?? {};
+
         setStats({
-          revenue: rev.data?.total  ?? 0,
-          orders:  rev.data?.count  ?? 0,
+          revenue: today.total    ?? rev.data?.total ?? 0,
+          orders:  today.orderCount ?? rev.data?.count ?? 0,
           pending: pending.length,
         });
+        setRevenueData(last7);
+        setWeekTotal(rev.data?.grandTotal   ?? 0);
+        setWeekOrders(rev.data?.totalOrders ?? 0);
         setPending(pending);
         setRestaurant(rest.data ?? null);
       })
@@ -116,7 +156,6 @@ export default function OwnerDashboard() {
     setRestaurant((r) => ({ ...r, isOpen: data.isOpen }));
   };
 
-  /* ── Loading state ── */
   if (loading) {
     return (
       <div className="owner-page">
@@ -128,7 +167,6 @@ export default function OwnerDashboard() {
   /* ── Sidebar ── */
   const Sidebar = () => (
     <aside className="owner-sidebar">
-      {/* Brand */}
       <div className="sb-brand">
         <div className="sb-logo">
           <span className="sb-logo-dot" />
@@ -136,7 +174,6 @@ export default function OwnerDashboard() {
         </div>
       </div>
 
-      {/* Restaurant info + toggle */}
       {restaurant && (
         <div className="sb-restaurant">
           <div className="sb-rest-name">{restaurant.name}</div>
@@ -151,7 +188,6 @@ export default function OwnerDashboard() {
         </div>
       )}
 
-      {/* Navigation */}
       <nav className="sb-nav">
         <div className="sb-nav-group">
           <span className="sb-nav-label">Operations</span>
@@ -200,7 +236,6 @@ export default function OwnerDashboard() {
         <Sidebar />
 
         <div className="owner-main">
-          {/* Top bar */}
           <div className="owner-topbar">
             <div className="topbar-left">
               <div className="topbar-title">Dashboard</div>
@@ -230,6 +265,30 @@ export default function OwnerDashboard() {
                 )}
               </div>
             </div>
+
+            {/* Revenue Chart */}
+            <section>
+              <div className="section-header">
+                <div className="section-title">
+                  <IconChart />
+                  Revenue — last 7 days
+                </div>
+                <div className="section-summary">
+                  <span className="week-total">₹{weekTotal.toFixed(0)}</span>
+                  <span className="week-orders">{weekOrders} orders</span>
+                </div>
+              </div>
+              {revenueData.length > 0 ? (
+                <div className="chart-card">
+                  <RevenueChart data={revenueData} />
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <div className="empty-state-icon">📊</div>
+                  No revenue data yet
+                </div>
+              )}
+            </section>
 
             {/* Incoming orders */}
             <section>

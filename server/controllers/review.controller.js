@@ -137,3 +137,58 @@ export const getKeywordSuggestions = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+// GET /api/reviews/my-keywords/:restaurantId
+// Suggests keywords based on what the user actually ordered
+exports.getMyKeywords = async (req, res) => {
+  try {
+    const Order = require('../models/Order');
+
+    // Get user's past orders at this restaurant
+    const orders = await Order.find({
+      userId: req.user.id,
+      restaurantId: req.params.restaurantId,
+      status: 'delivered',
+    }).select('items');
+
+    if (orders.length === 0) {
+      // Fall back to general keywords if no order history
+      return res.json({
+        keywords: [
+          'delicious', 'fresh', 'tasty', 'crispy', 'spicy',
+          'portions', 'flavour', 'service', 'packaging', 'quick',
+        ],
+        source: 'general',
+      });
+    }
+
+    // Extract item names from order history
+    const itemNames = [];
+    orders.forEach((order) => {
+      order.items.forEach((item) => {
+        if (item.name) itemNames.push(item.name.toLowerCase());
+      });
+    });
+
+    // Build keyword suggestions from item names + quality descriptors
+    const qualityWords = [
+      'delicious', 'fresh', 'crispy', 'spicy', 'flavourful',
+      'generous', 'portions', 'packaging', 'service', 'quick',
+      'tasty', 'aromatic', 'perfectly cooked', 'value',
+    ];
+
+    // Extract meaningful words from item names
+    const itemWords = [...new Set(
+      itemNames
+        .join(' ')
+        .split(/\s+/)
+        .filter((w) => w.length > 3)
+    )];
+
+    // Mix item-specific words with quality descriptors
+    const keywords = [...new Set([...itemWords, ...qualityWords])].slice(0, 10);
+
+    res.json({ keywords, source: 'order-history', itemsOrdered: [...new Set(itemNames)] });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

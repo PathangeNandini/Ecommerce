@@ -354,3 +354,42 @@
   .courier-nav { padding: 0.75rem 1rem; }
   .tracker-label { font-size: 0.6rem; }
 }
+
+/* ── Earnings Tracker ── */
+.earnings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.earnings-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px;
+  text-align: center;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.earnings-card.primary {
+  background: #ff6b00;
+  color: #fff;
+}
+
+.earnings-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.earnings-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.earnings-sub {
+  font-size: 0.75rem;
+  opacity: 0.65;
+  margin-top: 4px;
+}

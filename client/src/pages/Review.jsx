@@ -22,7 +22,13 @@ export default function Review() {
   // Load existing reviews and keyword suggestions
   useEffect(() => {
     api.get(`/reviews/${restaurantId}`).then(({ data }) => setReviews(data));
-    api.get(`/reviews/keywords/${restaurantId}`).then(({ data }) => setKeywords(data.keywords || []));
+    api.get(`/reviews/my-keywords/${restaurantId}`)
+  .then(({ data }) => setKeywords(data.keywords || []))
+  .catch(() => {
+    // fall back to general keywords
+    api.get(`/reviews/keywords/${restaurantId}`)
+      .then(({ data }) => setKeywords(data.keywords || []));
+  });
   }, [restaurantId]);
 
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length;

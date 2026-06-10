@@ -162,24 +162,73 @@ exports.updateStatus = async (req, res) => {
   } catch (err) { res.status(500).json({ msg: err.message }); }
 };
 
-/** GET /api/orders/revenue — restaurant only */
+/** GET /api/orders/revenue — restaurant owner only */
 exports.getDailyRevenue = async (req, res) => {
   try {
-    const date = req.query.date ? new Date(req.query.date) : new Date();
-    const startOfDay = new Date(date); startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay   = new Date(date); endOfDay.setHours(23, 59, 59, 999);
+    const restaurant = await require('../models/Restaurant').findOne({ ownerId: req.user.id });
+    if (!restaurant) return res.status(404).json({ msg: 'Restaurant not found' });
+
+    // Last 7 days including today
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
 
     const result = await Order.aggregate([
-      { $match: { status: 'delivered', createdAt: { $gte: startOfDay, $lte: endOfDay } } },
-      { $group: { _id: null, total: { $sum: '$totalPrice' }, count: { $sum: 1 } } }
+      {
+        $match: {
+          restaurantId: restaurant._id,
+          status: 'delivered',
+          createdAt: { $gte: sevenDaysAgo, $lte: today },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            year:  { $year:  '$createdAt' },
+            month: { $month: '$createdAt' },
+            day:   { $dayOfMonth: '$createdAt' },
+          },
+          total:      { $sum: '$totalPrice' },
+          orderCount: { $sum: 1 },
+        },
+      },
+      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
     ]);
 
-    res.json({
-      date: date.toDateString(),
-      total: result[0]?.total || 0,
-      count: result[0]?.count || 0,
+    // Fill in missing days with 0
+    const revenueMap = {};
+    result.forEach((r) => {
+      const key = `${r._id.year}-${String(r._id.month).padStart(2,'0')}-${String(r._id.day).padStart(2,'0')}`;
+      revenueMap[key] = { total: r.total, orderCount: r.orderCount };
     });
-  } catch (err) { res.status(500).json({ msg: err.message }); }
+
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      last7Days.push({
+        date:       key,
+        label:      d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }),
+        total:      revenueMap[key]?.total      || 0,
+        orderCount: revenueMap[key]?.orderCount || 0,
+      });
+    }
+
+    const grandTotal  = last7Days.reduce((s, d) => s + d.total, 0);
+    const totalOrders = last7Days.reduce((s, d) => s + d.orderCount, 0);
+
+    res.json({
+      last7Days,
+      grandTotal,
+      totalOrders,
+      restaurantName: restaurant.name,
+    });
+  } catch (err) {
+    res.status(500).json({ msg: err.message });
+  }
 };
 
 /** GET /api/orders/my-deliveries — courier only */
@@ -202,4 +251,45 @@ exports.getMyDeliveries = async (req, res) => {
 
     res.json(result);
   } catch (err) { res.status(500).json({ msg: err.message }); }
+};
+/** GET /api/orders/my-earnings — courier only */
+exports.getMyEarnings = async (req, res) => {
+  try {
+    const courierId = new mongoose.Types.ObjectId(req.user.id);
+
+    const today = new Date();
+    const startOfToday = new Date(today); startOfToday.setHours(0,0,0,0);
+    const endOfToday   = new Date(today); endOfToday.setHours(23,59,59,999);
+    const sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(today.getDate() - 6);
+    sevenDaysAgo.setHours(0,0,0,0);
+
+    const [todayResult, weekResult, totalResult] = await Promise.all([
+      // Today's earnings
+      Order.aggregate([
+        { $match: { courierId, status: "delivered",
+            createdAt: { $gte: startOfToday, $lte: endOfToday } } },
+        { $group: { _id: null,
+            earnings: { $sum: { $multiply: ["$totalPrice", 0.1] } },
+            count: { $sum: 1 } } },
+      ]),
+      // This week's earnings
+      Order.aggregate([
+        { $match: { courierId, status: "delivered",
+            createdAt: { $gte: sevenDaysAgo, $lte: endOfToday } } },
+        { $group: { _id: null,
+            earnings: { $sum: { $multiply: ["$totalPrice", 0.1] } } } },
+      ]),
+      // All time deliveries
+      Order.countDocuments({ courierId, status: "delivered" }),
+    ]);
+
+    res.json({
+      today:            todayResult[0]?.earnings    ?? 0,
+      todayDeliveries:  todayResult[0]?.count        ?? 0,
+      week:             weekResult[0]?.earnings      ?? 0,
+      totalDeliveries:  totalResult,
+    });
+  } catch (err) {
+    res.status(500).json({ msg: err.message });
+  }
 };
