@@ -1,45 +1,30 @@
 # ─────────────────────────────────────────────
 #  Dockerfile.server
-#  Builds the Express + Socket.io backend image
-#  Base: node:18-alpine  |  Port: 5000
+#  Multi-stage build: install deps → run server
 # ─────────────────────────────────────────────
 
-# ── Stage 1: dependencies ────────────────────
+# ── Stage 1: install production deps ─────────
 FROM node:18-alpine AS deps
-
 WORKDIR /app
 
-# Copy only package files first so Docker caches this layer.
-# Re-installs only when package.json or package-lock.json changes.
 COPY server/package*.json ./
-
+# Install only production dependencies
 RUN npm ci --omit=dev
 
-# ── Stage 2: final runtime image ─────────────
+# ── Stage 2: run the server ───────────────────
 FROM node:18-alpine AS runner
-
-# Add non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
 WORKDIR /app
 
-# Copy installed node_modules from deps stage
+# Copy installed deps from previous stage
 COPY --from=deps /app/node_modules ./node_modules
 
-# Copy application source
+# Copy server source
 COPY server/ .
 
-# Set ownership to non-root user
-RUN chown -R appuser:appgroup /app
-
+# Don't run as root
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
-# Expose the Express server port
 EXPOSE 5000
 
-# Health check — Docker will restart the container if /api/health fails
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:5000/api/health || exit 1
-
-# Start the server
 CMD ["node", "server.js"]
