@@ -5,7 +5,6 @@
 
 # ── Stage 1: build the React app ─────────────
 FROM node:18-alpine AS builder
-
 WORKDIR /app
 
 # Copy package files and install ALL deps (including devDeps for Vite)
