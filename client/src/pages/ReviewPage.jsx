@@ -1,190 +1,288 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../services/api";
-import "./ReviewPage.css";
+import "./Review.css";
 
-function scoreReview(text, mediaUrl, keywords) {
-  let score = 0;
-  const wordCount = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
-  if (wordCount >= 20) score += 10;
-  if (wordCount >= 50) score += 20;
-  if (wordCount >= 100) score += 30;
-  if (mediaUrl) score += 20;
-  score += keywords.length * 5;
-  return Math.min(score, 100);
-}
+const STARS = [1, 2, 3, 4, 5];
 
-export default function ReviewPage() {
-  const { orderId } = useParams();
+export default function Review() {
+  const { restaurantId } = useParams();
   const navigate = useNavigate();
+
+  const [rating, setRating] = useState(0);
+  const [hover, setHover] = useState(0);
   const [text, setText] = useState("");
-  const [mediaUrl, setMediaUrl] = useState("");
-  const [selectedKeywords, setSelectedKeywords] = useState([]);
-  const [suggestedKeywords, setSuggestedKeywords] = useState([]);
-  const [loadingKw, setLoadingKw] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [earnedPoints, setEarnedPoints] = useState(0);
+  const [keywords, setKeywords] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
+  const [points, setPoints] = useState(0);
 
-  const wordCount = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
-  const score = scoreReview(text, mediaUrl, selectedKeywords);
-
-  const fetchSuggestions = async () => {
-    setLoadingKw(true);
-    try {
-      const { data } = await api.get(`/reviews/suggestions?orderId=${orderId}`);
-      setSuggestedKeywords(data.keywords || []);
-    } catch {
-      setSuggestedKeywords(["tasty", "fresh", "quick delivery", "great value", "would order again"]);
-    } finally {
-      setLoadingKw(false);
+  // Load existing reviews and keyword suggestions
+  useEffect(() => {
+    if (!restaurantId) {
+      setError("Restaurant not found. Please go back and try again.");
+      return;
     }
+
+    api.get(`/reviews/${restaurantId}`)
+      .then(({ data }) => setReviews(data))
+      .catch((err) => console.error("Error loading reviews:", err));
+
+    api.get(`/reviews/my-keywords/${restaurantId}`)
+      .then(({ data }) => setKeywords(data.keywords || []))
+      .catch(() => {
+        // Fallback to general keywords
+        api.get(`/reviews/keywords/${restaurantId}`)
+          .then(({ data }) => setKeywords(data.keywords || []))
+          .catch(console.error);
+      });
+  }, [restaurantId]);
+
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  const meaningfulWords = text.split(/\s+/).filter((w) => w.length >= 5).length;
+
+  const getPointsPreview = () => {
+    let p = 10;
+    if (meaningfulWords >= 20) p += 20;
+    else if (meaningfulWords >= 10) p += 10;
+    else if (meaningfulWords >= 5) p += 5;
+    if (rating === 5) p += 5;
+    if (photo) p += 15;
+    return p;
   };
 
-  const toggleKeyword = (kw) => {
-    setSelectedKeywords((prev) =>
-      prev.includes(kw) ? prev.filter((k) => k !== kw) : [...prev, kw]
-    );
+  const handleKeyword = (kw) => {
+    setText((prev) => (prev ? `${prev} ${kw}` : kw));
   };
 
   const handleSubmit = async () => {
-    if (text.trim().length < 10) { setError("Please write at least a few words."); return; }
+    // Clear previous messages
     setError("");
-    setSubmitting(true);
+    setSuccess("");
+
+    // Validation
+    if (!rating) {
+      setError("⭐ Please select a star rating (1-5)");
+      return;
+    }
+    if (!text.trim()) {
+      setError("✏️ Please write a review (at least 10 characters)");
+      return;
+    }
+    if (text.trim().length < 10) {
+      setError("✏️ Review must be at least 10 characters");
+      return;
+    }
+    if (!restaurantId) {
+      setError("🏪 Restaurant not found");
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      const { data } = await api.post("/reviews", {
-        orderId,
-        text,
-        mediaUrl: mediaUrl || undefined,
-        keywords: selectedKeywords,
+      const formData = new FormData();
+      formData.append("restaurantId", restaurantId);
+      formData.append("rating", rating);
+      formData.append("text", text);
+      if (photo) formData.append("photo", photo);
+
+      const { data } = await api.post("/reviews", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      setEarnedPoints(data.pointsEarned);
-      setSubmitted(true);
+
+      // ✅ SUCCESS - Stay on page and show feedback
+      setPoints(data.pointsAwarded);
+      setSuccess(data.message);
+      
+      // Reset form
+      setRating(0);
+      setText("");
+      setPhoto(null);
+      setPreview(null);
+
+      // Reload reviews to show the new review
+      const updated = await api.get(`/reviews/${restaurantId}`);
+      setReviews(updated.data);
+
+      // Scroll to top to show success message
+      window.scrollTo({ top: 0, behavior: "smooth" });
+
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setSuccess("");
+      }, 5000);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to submit review.");
+      const errorMsg = err.response?.data?.message || "Failed to submit review";
+      setError(`❌ ${errorMsg}`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
-  if (submitted) {
-    return (
-      <div className="review-page">
-        <div className="review-success">
-          <div className="success-confetti">🎉</div>
-          <h1>Review submitted!</h1>
-          <p>You earned</p>
-          <div className="points-earned">+{earnedPoints} points</div>
-          <p className="success-sub">Keep reviewing to unlock more rewards!</p>
-          <button onClick={() => navigate("/profile")} className="go-profile-btn">
-            View My Points
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="review-page">
-      <div className="review-header">
-        <button className="rev-back" onClick={() => navigate(-1)}>← Back</button>
-        <h1>Write a Review</h1>
-      </div>
-
-      <div className="review-body">
-        {/* Score preview */}
-        <div className="score-card">
-          <div className="score-ring">
-            <svg viewBox="0 0 80 80" className="score-svg">
-              <circle cx="40" cy="40" r="34" fill="none" stroke="#2a2a2a" strokeWidth="6" />
-              <circle
-                cx="40" cy="40" r="34"
-                fill="none"
-                stroke="#e8450a"
-                strokeWidth="6"
-                strokeDasharray={`${2 * Math.PI * 34}`}
-                strokeDashoffset={`${2 * Math.PI * 34 * (1 - score / 100)}`}
-                strokeLinecap="round"
-                transform="rotate(-90 40 40)"
-                style={{ transition: "stroke-dashoffset 0.4s ease" }}
-              />
-            </svg>
-            <div className="score-number">{score}</div>
-          </div>
-          <div className="score-info">
-            <p className="score-label">Review Score</p>
-            <p className="score-points">You'll earn <strong>{Math.floor(score / 2)} points</strong></p>
-            <div className="score-hints">
-              <span className={wordCount >= 20 ? "hint done" : "hint"}>20+ words +10</span>
-              <span className={wordCount >= 50 ? "hint done" : "hint"}>50+ words +20</span>
-              <span className={wordCount >= 100 ? "hint done" : "hint"}>100+ words +30</span>
-              <span className={mediaUrl ? "hint done" : "hint"}>Photo +20</span>
-              <span className={selectedKeywords.length > 0 ? "hint done" : "hint"}>Keywords +5 each</span>
-            </div>
-          </div>
+      <div className="review-container">
+        <div className="review-top-bar">
+          <button className="review-back" onClick={() => navigate(-1)}>
+            ← Back
+          </button>
+          <h2>Rate & Review</h2>
         </div>
 
-        {/* Text area */}
-        <div className="review-section">
-          <label className="rev-label">
-            Your review
-            <span className="word-count">{wordCount} word{wordCount !== 1 ? "s" : ""}</span>
-          </label>
-          <textarea
-            className="rev-textarea"
-            placeholder="How was the food? Was it fresh, hot, tasty? Tell us everything…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={6}
-          />
-        </div>
-
-        {/* Photo URL */}
-        <div className="review-section">
-          <label className="rev-label">Photo URL (optional) <span className="bonus-tag">+20 pts</span></label>
-          <input
-            className="rev-input"
-            type="url"
-            placeholder="https://your-photo-url.jpg"
-            value={mediaUrl}
-            onChange={(e) => setMediaUrl(e.target.value)}
-          />
-        </div>
-
-        {/* Keywords */}
-        <div className="review-section">
-          <div className="kw-label-row">
-            <label className="rev-label">Keywords <span className="bonus-tag">+5 pts each</span></label>
-            <button className="suggest-btn" onClick={fetchSuggestions} disabled={loadingKw}>
-              {loadingKw ? "Loading…" : "✨ Suggest keywords"}
-            </button>
+        {/* Star Rating Section */}
+        <div className="star-section">
+          <label className="star-label">⭐ Select Your Rating</label>
+          <div className="star-row">
+            {STARS.map((s) => (
+              <span
+                key={s}
+                className={`star ${s <= (hover || rating) ? "filled" : ""}`}
+                onClick={() => setRating(s)}
+                onMouseEnter={() => setHover(s)}
+                onMouseLeave={() => setHover(0)}
+              >
+                ★
+              </span>
+            ))}
+            {rating > 0 && (
+              <span className="rating-label">
+                {["", "Poor", "Fair", "Good", "Very Good", "Excellent"][rating]}
+              </span>
+            )}
           </div>
+          {!rating && <p className="star-hint">👆 Tap to rate</p>}
+        </div>
 
-          {suggestedKeywords.length > 0 && (
-            <div className="kw-chips">
-              {suggestedKeywords.map((kw) => (
+        {/* Keyword suggestions */}
+        {keywords.length > 0 && (
+          <div className="keywords-section">
+            <p className="keywords-label">💡 Suggested keywords — tap to add:</p>
+            <div className="keywords-list">
+              {keywords.map((kw) => (
                 <button
                   key={kw}
-                  className={`kw-chip ${selectedKeywords.includes(kw) ? "selected" : ""}`}
-                  onClick={() => toggleKeyword(kw)}
+                  className="keyword-chip"
+                  onClick={() => handleKeyword(kw)}
                 >
                   {kw}
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Review textarea */}
+        <div className="textarea-section">
+          <label className="textarea-label">✏️ Your Review</label>
+          <textarea
+            className="review-textarea"
+            placeholder="Share your experience... (min 10 characters)"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={5}
+          />
+          <div className="textarea-meta">
+            <span className={wordCount < 10 ? "text-warning" : ""}>
+              {wordCount} words
+            </span>
+          </div>
+        </div>
+
+        {/* Photo upload */}
+        <div className="photo-upload-section">
+          <label className="photo-upload-label">
+            📷 Add a photo <span className="photo-bonus">+15 points</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="photo-input"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  setPhoto(file);
+                  setPreview(URL.createObjectURL(file));
+                }
+              }}
+            />
+          </label>
+          {preview && (
+            <div className="photo-preview-wrap">
+              <img src={preview} alt="preview" className="photo-preview" />
+              <button
+                className="photo-remove"
+                onClick={() => {
+                  setPhoto(null);
+                  setPreview(null);
+                }}
+              >
+                ✕
+              </button>
+            </div>
           )}
         </div>
 
-        {error && <div className="rev-error">{error}</div>}
+        {/* Points preview */}
+        <div className="review-meta">
+          <span>🏆 You'll earn ~{getPointsPreview()} points</span>
+        </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="review-error-box">
+            <p>{error}</p>
+          </div>
+        )}
+
+        {/* Success Message */}
+        {success && (
+          <div className="review-success">
+            <p>✅ {success}</p>
+            <p className="points-awarded">+{points} reward points added!</p>
+          </div>
+        )}
+
+        {/* Submit Button */}
         <button
-          className="submit-review-btn"
+          className={`submit-btn ${!rating || text.trim().length < 10 ? "disabled" : ""}`}
           onClick={handleSubmit}
-          disabled={submitting}
+          disabled={loading || !rating || text.trim().length < 10}
         >
-          {submitting ? "Submitting…" : `Submit Review · Earn ${Math.floor(score / 2)} pts`}
+          {loading ? "Submitting..." : `Submit Review · Earn ${getPointsPreview()} pts`}
         </button>
+
+        {/* Existing reviews */}
+        {reviews.length > 0 && (
+          <div className="reviews-list">
+            <h3>What others say</h3>
+            {reviews.map((r) => (
+              <div key={r._id} className="review-item">
+                <div className="review-header">
+                  <span className="review-author">{r.userId?.name || "Anonymous"}</span>
+                  <span className="review-stars">
+                    {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}
+                  </span>
+                </div>
+                <p className="review-text">{r.text}</p>
+                {r.photoUrl && (
+                  <img
+                    src={`${import.meta.env.VITE_API_URL || "http://localhost:5000"}${r.photoUrl}`}
+                    alt="review"
+                    className="review-photo"
+                  />
+                )}
+                <span className="review-date">
+                  {new Date(r.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

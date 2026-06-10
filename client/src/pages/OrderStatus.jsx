@@ -5,135 +5,202 @@ import { useSocket } from "../hooks/useSocket";
 import "./OrderStatus.css";
 
 const STEPS = [
-  { key: "placed",    label: "Order Placed",    icon: "🧾" },
-  { key: "preparing", label: "Preparing",        icon: "👨‍🍳" },
-  { key: "assigned",  label: "Courier Assigned", icon: "🛵" },
-  { key: "transit",   label: "On the Way",       icon: "🚀" },
-  { key: "delivered", label: "Delivered",        icon: "✅" },
+  { key: "placed", label: "Order Placed", icon: "🧾" },
+  { key: "preparing", label: "Preparing", icon: "👨‍🍳" },
+  { key: "assigned", label: "Courier Assigned", icon: "🛵" },
+  { key: "transit", label: "On the Way", icon: "🚀" },
+  { key: "delivered", label: "Delivered", icon: "✅" },
 ];
-
-const STEP_INDEX = Object.fromEntries(STEPS.map((s, i) => [s.key, i]));
 
 export default function OrderStatus() {
   const { id } = useParams();
   const socket = useSocket();
   const [order, setOrder] = useState(null);
+  const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!id) return;
+
+    // Fetch initial order — NO /api prefix, axios already has it as baseURL
     api.get(`/orders/${id}`)
-      .then(({ data }) => setOrder(data))
+      .then(({ data }) => {
+        setOrder(data);
+        const stepIndex = STEPS.findIndex((s) => s.key === data.status);
+        setCurrentStep(Math.max(0, stepIndex));
+      })
+      .catch((err) => console.error("Fetch error:", err))
       .finally(() => setLoading(false));
-  }, [id]);
 
-  useEffect(() => {
-    if (!socket) return;
+    // Listen for order updates via WebSocket
+    if (socket) {
+      socket.emit("join:order", id);
+      socket.on(`order:placed`, handleStatusUpdate);
+      socket.on(`order:preparing`, handleStatusUpdate);
+      socket.on(`order:assigned`, handleStatusUpdate);
+      socket.on(`order:transit`, handleStatusUpdate);
+      socket.on(`order:delivered`, handleStatusUpdate);
 
-    socket.emit("join:order", id);
+      return () => {
+        socket.off(`order:placed`, handleStatusUpdate);
+        socket.off(`order:preparing`, handleStatusUpdate);
+        socket.off(`order:assigned`, handleStatusUpdate);
+        socket.off(`order:transit`, handleStatusUpdate);
+        socket.off(`order:delivered`, handleStatusUpdate);
+      };
+    }
+  }, [id, socket]);
 
-    const update = (data) => {
-      if (data.orderId === id || data.orderId?.toString() === id) {
-        setOrder((prev) => prev ? { ...prev, status: data.status } : prev);
-      }
-    };
+  const handleStatusUpdate = (data) => {
+    if (data.orderId === id) {
+      setOrder((prev) => ({ ...prev, ...data }));
+      const stepIndex = STEPS.findIndex((s) => s.key === data.status);
+      setCurrentStep(Math.max(0, stepIndex));
+    }
+  };
 
-    socket.on("order:preparing",        update);
-    socket.on("order:assigned",         update);
-    socket.on("order:transit",          update);
-    socket.on("order:courier_assigned", update);
-    socket.on("order:delivered",        update);
+  if (loading) {
+    return (
+      <div className="order-status-page">
+        <div className="status-loading">Loading order details...</div>
+      </div>
+    );
+  }
 
-    return () => {
-      socket.off("order:preparing",        update);
-      socket.off("order:assigned",         update);
-      socket.off("order:transit",          update);
-      socket.off("order:courier_assigned", update);
-      socket.off("order:delivered",        update);
-    };
-  }, [socket, id]);
+  if (!order) {
+    return (
+      <div className="order-status-page">
+        <div className="status-error">Order not found</div>
+      </div>
+    );
+  }
 
-  if (loading) return <div className="status-loading">Loading order…</div>;
-  if (!order)  return <div className="status-loading">Order not found.</div>;
-
-  const currentStep = STEP_INDEX[order.status] ?? 0;
   const restaurantId = order.restaurantId?._id || order.restaurantId;
 
   return (
-    <div className="status-page">
-      <div className="status-card">
-
-        {/* Header */}
+    <div className="order-status-page">
+      <div className="status-container">
         <div className="status-header">
-          <Link to="/" className="status-back">← Back to Home</Link>
-          <h2 className="status-title">Order Tracking</h2>
-          <p className="status-order-id">#{id.slice(-8).toUpperCase()}</p>
+          <h2>Order Tracking</h2>
+          <p className="order-id">Order #{order._id?.slice(-8).toUpperCase()}</p>
         </div>
 
-        {/* Progress Tracker */}
-        <div className="status-tracker">
-          {STEPS.map((step, idx) => {
-            const done    = idx < currentStep;
-            const active  = idx === currentStep;
-            return (
-              <div key={step.key} className="status-step-wrapper">
-                <div className={`status-step ${done ? "done" : ""} ${active ? "active" : ""}`}>
-                  <div className="step-icon">{step.icon}</div>
-                  <div className="step-label">{step.label}</div>
-                </div>
-                {idx < STEPS.length - 1 && (
-                  <div className={`status-connector ${done ? "done" : ""}`} />
-                )}
-              </div>
-            );
-          })}
+        {/* Status Timeline */}
+        <div className="status-timeline">
+          {STEPS.map((step, i) => (
+            <div key={step.key} className={`timeline-step ${i <= currentStep ? "active" : ""}`}>
+              <div className="step-icon">{step.icon}</div>
+              <div className="step-label">{step.label}</div>
+            </div>
+          ))}
         </div>
 
-        {/* Current Status Banner */}
-        <div className="status-banner">
-          <span className="status-badge">
-            {STEPS[currentStep]?.icon} {STEPS[currentStep]?.label}
-          </span>
-          {order.status === "delivered" && (
-            <p className="status-delivered-msg">Your order has been delivered. Enjoy your meal! 🎉</p>
+        {/* Order Details */}
+        <div className="order-details-card">
+          <h3>Order Details</h3>
+
+          <div className="detail-section">
+            <span className="detail-label">Restaurant</span>
+            <span className="detail-value">
+              {order.restaurantId?.name || order.restaurantName || "N/A"}
+            </span>
+          </div>
+
+          <div className="detail-section">
+            <span className="detail-label">Delivery Address</span>
+            <span className="detail-value">{order.deliveryAddress || "Not specified"}</span>
+          </div>
+
+          <div className="detail-section">
+            <span className="detail-label">Order Time</span>
+            <span className="detail-value">
+              {new Date(order.createdAt).toLocaleString("en-IN")}
+            </span>
+          </div>
+
+          <div className="detail-section">
+            <span className="detail-label">Status</span>
+            <span className={`status-badge ${order.status}`}>
+              {order.status?.toUpperCase()}
+            </span>
+          </div>
+
+          {order.courierId && (
+            <div className="detail-section">
+              <span className="detail-label">Courier</span>
+              <span className="detail-value">
+                {order.courierId?.name || "Assigned"}
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Order Summary */}
-        <div className="status-summary">
-          <h3>Order Summary</h3>
-          <ul className="status-items">
+        {/* Items List */}
+        <div className="order-items-card">
+          <h3>Items</h3>
+          <div className="items-list">
             {order.items?.map((item, i) => (
-              <li key={i} className="status-item">
-                <span className="item-name">{item.name}</span>
-                <span className="item-meta">× {item.quantity}</span>
-                <span className="item-price">₹{(item.totalPrice ?? item.price * item.quantity ?? 0).toFixed(2)}</span>
-              </li>
+              <div key={i} className="item-row">
+                <div className="item-info">
+                  <span className="item-name">{item.name}</span>
+                  <span className="item-meta">× {item.qty || item.quantity}</span>
+                </div>
+                <span className="item-price">
+                  ₹{(item.totalPrice ?? (item.price * (item.qty || item.quantity)) ?? 0).toFixed(2)}
+                </span>
+              </div>
             ))}
-          </ul>
-          <div className="status-total">
-            <span>Total</span>
-            <span>₹{order.totalPrice?.toFixed(2)}</span>
+          </div>
+
+          <div className="order-summary">
+            <div className="summary-row">
+              <span>Subtotal</span>
+              <span>₹{(order.totalPrice * 0.9).toFixed(2)}</span>
+            </div>
+            <div className="summary-row">
+              <span>Delivery Fee</span>
+              <span>₹50.00</span>
+            </div>
+            <div className="summary-row total">
+              <span>Total</span>
+              <span>₹{order.totalPrice?.toFixed(2)}</span>
+            </div>
           </div>
         </div>
 
-        {/* Delivery Address */}
-        {order.deliveryAddress && (
-          <div className="status-address">
-            <span>📍</span>
-            <span>{order.deliveryAddress}</span>
+        {/* Payment Status */}
+        <div className="payment-status-card">
+          <h3>Payment</h3>
+          <div className="payment-row">
+            <span className="detail-label">Status</span>
+            <span className={`payment-badge ${order.paymentStatus}`}>
+              {order.paymentStatus?.toUpperCase()}
+            </span>
           </div>
-        )}
+          {order.paymentDetails?.transactionId && (
+            <div className="payment-row">
+              <span className="detail-label">Transaction ID</span>
+              <span className="detail-value">{order.paymentDetails.transactionId}</span>
+            </div>
+          )}
+        </div>
 
         {/* Actions */}
         <div className="status-actions">
-          <Link to="/" className="btn-back-home">Back to Home</Link>
+          <Link to="/" className="btn-back-home">
+            ← Back
+          </Link>
+          {order.status === "delivered" && restaurantId && (
+            <Link to={`/review/${restaurantId}`} className="btn-review">
+              ⭐ Review
+            </Link>
+          )}
           {restaurantId && (
             <Link to={`/restaurant/${restaurantId}`} className="btn-reorder">
-              Order Again
+              🔄 Order Again
             </Link>
           )}
         </div>
-
       </div>
     </div>
   );
