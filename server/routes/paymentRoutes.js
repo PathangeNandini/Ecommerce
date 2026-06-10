@@ -1,13 +1,10 @@
-import express from "express";
-import { chargePayment, getPaymentStatus } from "../controllers/paymentController.js";
-import { protect } from "../middleware/authMiddleware.js";
+const express = require('express');
+const { chargePayment, getPaymentStatus } = require('../controllers/paymentController');
+const { protect } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// POST /api/payments/charge
-router.post("/charge", protect, chargePayment);
+router.post('/charge', protect, chargePayment);
+router.get('/status/:orderId', protect, getPaymentStatus);
 
-// GET /api/payments/status/:orderId
-router.get("/status/:orderId", protect, getPaymentStatus);
-
-export default router;
+module.exports = router;

@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
 
 const reservationSchema = new mongoose.Schema(
   {
@@ -18,7 +18,7 @@ const reservationSchema = new mongoose.Schema(
     },
     timeSlot: {
       type: String,
-      required: true, // e.g. "19:00"
+      required: true,
     },
     partySize: {
       type: Number,
@@ -43,8 +43,7 @@ const reservationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Prevent double booking — same restaurant, date, timeSlot, tableNumber
 reservationSchema.index({ userId: 1, date: -1 });
 reservationSchema.index({ restaurantId: 1, date: 1, status: 1 });
 
-export default mongoose.model("Reservation", reservationSchema);
+module.exports = mongoose.model("Reservation", reservationSchema);

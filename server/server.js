@@ -2,38 +2,37 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const connectDB = require('./config/db');
 const { initSocket } = require('./config/socket');
 
-// Load env vars first
 dotenv.config();
-
-// Connect to MongoDB
 connectDB();
 
 const app = express();
 const httpServer = http.createServer(app);
-
-// Initialize Socket.io on the HTTP server
 const io = initSocket(httpServer);
-
-// Make io accessible inside controllers via req.app.get('io')
 app.set('io', io);
 
 // ── Middleware ──────────────────────────────────────────────
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
+  credentials: true,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve uploaded review images
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // ── Routes ──────────────────────────────────────────────────
-app.use('/api/auth', require('./routes/auth.routes'));
-app.use('/api/restaurants', require('./routes/restaurant.routes'));
-app.use('/api/orders', require('./routes/order.routes'));
-app.use('/api/reviews', require('./routes/review.routes'));
-app.use('/api/menu', require('./routes/menu.routes'));
+app.use('/api/auth',         require('./routes/auth.routes'));
+app.use('/api/restaurants',  require('./routes/restaurant.routes'));
+app.use('/api/orders',       require('./routes/order.routes'));
+app.use('/api/menu',         require('./routes/menu.routes'));
+app.use('/api/reviews',      require('./routes/reviewRoutes'));
+app.use('/api/payments',     require('./routes/paymentRoutes'));
+app.use('/api/reservations', require('./routes/reservationRoutes'));
 
 // ── Health check ────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
@@ -49,5 +48,4 @@ httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-// Export for testing
 module.exports = { app, httpServer };

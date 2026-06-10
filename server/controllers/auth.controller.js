@@ -128,7 +128,7 @@ exports.getMe = async (req, res) => {
   }
 };
 // PATCH /api/auth/profile
-export const updateProfile = async (req, res) => {
+exports.updateProfile = async (req, res) => {
   try {
     const { name, phone, address } = req.body;
     const updated = await User.findByIdAndUpdate(
