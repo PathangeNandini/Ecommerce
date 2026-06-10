@@ -43,7 +43,19 @@ const orderSchema = new mongoose.Schema({
   },
   deliveryAddress: {
     type: String
-  }
+  },
+  paymentStatus: {
+  type: String,
+  enum: ["pending", "paid", "failed"],
+  default: "pending",
+},
+paymentDetails: {
+  transactionId: String,
+  status: String,
+  amount: Number,
+  paymentMethod: String,
+  paidAt: Date,
+}
 }, { timestamps: true });
 
 // Index for fast lookup of orders by user

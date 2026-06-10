@@ -34,7 +34,11 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
-  }
+  },
+  rewardPoints: {
+  type: Number,
+  default: 0,
+}
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

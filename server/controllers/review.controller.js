@@ -1,112 +1,139 @@
-const Review = require('../models/Review');
-const Order = require('../models/Order');
-const User = require('../models/User');
-const MenuItem = require('../models/MenuItem');
-const { scoreReview, calculatePoints } = require('../utils/reviewScorer');
-const { suggestKeywords } = require('../utils/nlpHelper');
+import Review from "../models/Review.js";
+import User from "../models/User.js";
+import Restaurant from "../models/Restaurant.js";
 
-/**
- * POST /api/reviews
- * Submit a review for a delivered order.
- * Awards loyalty points to the user based on review quality.
- */
-exports.submitReview = async (req, res) => {
+// Helper — count meaningful words (5+ chars) for gamification
+const countMeaningfulWords = (text) => {
+  return text.split(/\s+/).filter((w) => w.length >= 5).length;
+};
+
+// Helper — award points based on review quality
+const calcPoints = (text, rating) => {
+  let points = 10; // base points for any review
+  const meaningfulWords = countMeaningfulWords(text);
+
+  if (meaningfulWords >= 20) points += 20;
+  else if (meaningfulWords >= 10) points += 10;
+  else if (meaningfulWords >= 5) points += 5;
+
+  if (rating === 5) points += 5; // bonus for 5-star
+
+  return points;
+};
+
+// POST /api/reviews
+export const createReview = async (req, res) => {
   try {
-    const { orderId, text, mediaUrl, keywords = [] } = req.body;
+    const { restaurantId, orderId, rating, text } = req.body;
 
-    // Verify the order exists, belongs to this user, and is delivered
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ msg: 'Order not found' });
-    if (order.userId.toString() !== req.user.id) {
-      return res.status(403).json({ msg: 'You can only review your own orders' });
-    }
-    if (order.status !== 'delivered') {
-      return res.status(400).json({ msg: 'You can only review delivered orders' });
+    if (!restaurantId || !rating || !text) {
+      return res.status(400).json({ message: "restaurantId, rating, and text are required" });
     }
 
-    // Check for duplicate review
-    const existing = await Review.findOne({ orderId });
-    if (existing) return res.status(400).json({ msg: 'You have already reviewed this order' });
+    // Prevent duplicate reviews for same order
+    if (orderId) {
+      const existing = await Review.findOne({ orderId, userId: req.user.id });
+      if (existing) {
+        return res.status(400).json({ message: "You already reviewed this order" });
+      }
+    }
 
-    // Score the review using our algorithm
-    const score = scoreReview(text, mediaUrl, keywords);
-    const pointsEarned = calculatePoints(score);
+    const points = calcPoints(text, rating);
+    const meaningfulWords = countMeaningfulWords(text);
 
-    // Save the review
     const review = await Review.create({
+      restaurantId,
       orderId,
       userId: req.user.id,
-      restaurantId: order.restaurantId,
+      rating,
       text,
-      mediaUrl,
-      keywords,
-      score,
-      pointsEarned
+      pointsAwarded: points,
     });
 
-    // Award loyalty points to the user (atomic update)
+    // Add points to user
     await User.findByIdAndUpdate(req.user.id, {
-      $inc: { loyaltyPoints: pointsEarned }
+      $inc: { rewardPoints: points },
+    });
+
+    // Recalculate restaurant average rating
+    const allReviews = await Review.find({ restaurantId });
+    const avgRating =
+      allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
+
+    await Restaurant.findByIdAndUpdate(restaurantId, {
+      rating: Math.round(avgRating * 10) / 10,
     });
 
     res.status(201).json({
+      success: true,
       review,
-      score,
-      pointsEarned,
-      message: `Great review! You earned ${pointsEarned} loyalty points.`
+      pointsAwarded: points,
+      meaningfulWords,
+      message: `You earned ${points} reward points for this review!`,
     });
   } catch (err) {
-    console.error('submitReview error:', err.message);
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ message: err.message });
   }
 };
 
-/**
- * GET /api/reviews/:restaurantId
- * Get paginated reviews for a restaurant.
- * 
- * Query params: page (default 0), limit (default 10)
- */
-exports.getReviews = async (req, res) => {
+// GET /api/reviews/:restaurantId
+export const getReviews = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 0;
-    const limit = parseInt(req.query.limit) || 10;
-
     const reviews = await Review.find({ restaurantId: req.params.restaurantId })
-      .populate('userId', 'name')
-      .sort({ createdAt: -1 })
-      .skip(page * limit)
-      .limit(limit);
+      .populate("userId", "name")
+      .sort({ createdAt: -1 });
 
-    const total = await Review.countDocuments({ restaurantId: req.params.restaurantId });
-
-    res.json({ reviews, total, page, hasMore: (page + 1) * limit < total });
+    res.json(reviews);
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ message: err.message });
   }
 };
 
-/**
- * GET /api/reviews/suggestions
- * Get AI keyword suggestions based on ordered items.
- * 
- * Query params: orderId
- */
-exports.getSuggestions = async (req, res) => {
+// GET /api/reviews/my
+export const getMyReviews = async (req, res) => {
   try {
-    const { orderId } = req.query;
-    if (!orderId) return res.status(400).json({ msg: 'orderId is required' });
+    const reviews = await Review.find({ userId: req.user.id })
+      .populate("restaurantId", "name")
+      .sort({ createdAt: -1 });
 
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ msg: 'Order not found' });
-
-    // Build comma-separated list of ordered items
-    const itemNames = order.items.map(i => i.name).join(', ');
-
-    const keywords = await suggestKeywords(itemNames);
-
-    res.json({ keywords, items: itemNames });
+    res.json(reviews);
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// GET /api/reviews/keywords/:restaurantId — AI keyword suggestions
+export const getKeywordSuggestions = async (req, res) => {
+  try {
+    const reviews = await Review.find({
+      restaurantId: req.params.restaurantId,
+    }).select("text");
+
+    // Extract common words from existing reviews
+    const wordMap = {};
+    const stopWords = new Set([
+      "the", "and", "was", "for", "are", "with", "this", "that",
+      "have", "from", "they", "will", "been", "were", "said",
+    ]);
+
+    reviews.forEach((r) => {
+      r.text
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, "")
+        .split(/\s+/)
+        .filter((w) => w.length > 4 && !stopWords.has(w))
+        .forEach((w) => {
+          wordMap[w] = (wordMap[w] || 0) + 1;
+        });
+    });
+
+    const keywords = Object.entries(wordMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([word]) => word);
+
+    res.json({ keywords });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };

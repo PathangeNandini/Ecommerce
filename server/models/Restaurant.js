@@ -50,7 +50,19 @@ const restaurantSchema = new mongoose.Schema({
   isOpen: {
     type: Boolean,
     default: true
-  }
+  },
+  tablesAvailable: {
+  type: Number,
+  default: 10,
+},
+timeSlots: {
+  type: [String],
+  default: ["12:00", "13:00", "14:00", "19:00", "20:00", "21:00"],
+},
+acceptsReservations: {
+  type: Boolean,
+  default: true,
+}
 }, { timestamps: true });
 
 // CRITICAL: This index is required for $geoNear to work.

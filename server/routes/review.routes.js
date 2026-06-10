@@ -1,21 +1,24 @@
-const express = require('express');
+import express from "express";
+import {
+  createReview,
+  getReviews,
+  getMyReviews,
+  getKeywordSuggestions,
+} from "../controllers/reviewController.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-const {
-  submitReview,
-  getReviews,
-  getSuggestions
-} = require('../controllers/review.controller');
+// POST /api/reviews
+router.post("/", protect, createReview);
 
-const {
-  protect
-} = require('../middleware/authMiddleware');
+// GET /api/reviews/my
+router.get("/my", protect, getMyReviews);
 
-router.get('/suggestions', protect, getSuggestions);
+// GET /api/reviews/keywords/:restaurantId
+router.get("/keywords/:restaurantId", getKeywordSuggestions);
 
-router.post('/', protect, submitReview);
+// GET /api/reviews/:restaurantId
+router.get("/:restaurantId", getReviews);
 
-router.get('/:restaurantId', getReviews);
-
-module.exports = router;
+export default router;

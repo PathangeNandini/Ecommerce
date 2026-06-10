@@ -127,3 +127,18 @@ exports.getMe = async (req, res) => {
     res.status(500).json({ msg: err.message });
   }
 };
+// PATCH /api/auth/profile
+export const updateProfile = async (req, res) => {
+  try {
+    const { name, phone, address } = req.body;
+    const updated = await User.findByIdAndUpdate(
+      req.user.id,
+      { name, phone, address },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
