@@ -44,9 +44,7 @@ const reservationSchema = new mongoose.Schema(
 );
 
 // Prevent double booking — same restaurant, date, timeSlot, tableNumber
-reservationSchema.index(
-  { restaurantId: 1, date: 1, timeSlot: 1, tableNumber: 1 },
-  { unique: true, sparse: true }
-);
+reservationSchema.index({ userId: 1, date: -1 });
+reservationSchema.index({ restaurantId: 1, date: 1, status: 1 });
 
 export default mongoose.model("Reservation", reservationSchema);

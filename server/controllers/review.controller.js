@@ -2,21 +2,22 @@ import Review from "../models/Review.js";
 import User from "../models/User.js";
 import Restaurant from "../models/Restaurant.js";
 
-// Helper — count meaningful words (5+ chars) for gamification
+// Helper — count meaningful words (5+ chars)
 const countMeaningfulWords = (text) => {
   return text.split(/\s+/).filter((w) => w.length >= 5).length;
 };
 
 // Helper — award points based on review quality
-const calcPoints = (text, rating) => {
-  let points = 10; // base points for any review
+const calcPoints = (text, rating, hasPhoto) => {
+  let points = 10; // base
   const meaningfulWords = countMeaningfulWords(text);
 
   if (meaningfulWords >= 20) points += 20;
   else if (meaningfulWords >= 10) points += 10;
   else if (meaningfulWords >= 5) points += 5;
 
-  if (rating === 5) points += 5; // bonus for 5-star
+  if (rating === 5) points += 5;
+  if (hasPhoto) points += 15; // bonus for photo upload
 
   return points;
 };
@@ -38,15 +39,22 @@ export const createReview = async (req, res) => {
       }
     }
 
-    const points = calcPoints(text, rating);
+    // Handle uploaded photo
+    const photoUrl = req.file
+      ? `/uploads/reviews/${req.file.filename}`
+      : null;
+
+    const hasPhoto = !!photoUrl;
+    const points = calcPoints(text, parseInt(rating), hasPhoto);
     const meaningfulWords = countMeaningfulWords(text);
 
     const review = await Review.create({
       restaurantId,
       orderId,
       userId: req.user.id,
-      rating,
+      rating: parseInt(rating),
       text,
+      photoUrl,
       pointsAwarded: points,
     });
 
@@ -69,7 +77,8 @@ export const createReview = async (req, res) => {
       review,
       pointsAwarded: points,
       meaningfulWords,
-      message: `You earned ${points} reward points for this review!`,
+      hasPhoto,
+      message: `You earned ${points} reward points for this review!${hasPhoto ? " (+15 for photo)" : ""}`,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -102,14 +111,13 @@ export const getMyReviews = async (req, res) => {
   }
 };
 
-// GET /api/reviews/keywords/:restaurantId — AI keyword suggestions
+// GET /api/reviews/keywords/:restaurantId
 export const getKeywordSuggestions = async (req, res) => {
   try {
     const reviews = await Review.find({
       restaurantId: req.params.restaurantId,
     }).select("text");
 
-    // Extract common words from existing reviews
     const wordMap = {};
     const stopWords = new Set([
       "the", "and", "was", "for", "are", "with", "this", "that",
@@ -137,31 +145,28 @@ export const getKeywordSuggestions = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-// GET /api/reviews/my-keywords/:restaurantId
-// Suggests keywords based on what the user actually ordered
-exports.getMyKeywords = async (req, res) => {
-  try {
-    const Order = require('../models/Order');
 
-    // Get user's past orders at this restaurant
+// GET /api/reviews/my-keywords/:restaurantId
+export const getMyKeywords = async (req, res) => {
+  try {
+    const Order = (await import("../models/Order.js")).default;
+
     const orders = await Order.find({
       userId: req.user.id,
       restaurantId: req.params.restaurantId,
-      status: 'delivered',
-    }).select('items');
+      status: "delivered",
+    }).select("items");
 
     if (orders.length === 0) {
-      // Fall back to general keywords if no order history
       return res.json({
         keywords: [
-          'delicious', 'fresh', 'tasty', 'crispy', 'spicy',
-          'portions', 'flavour', 'service', 'packaging', 'quick',
+          "delicious", "fresh", "tasty", "crispy", "spicy",
+          "portions", "flavour", "service", "packaging", "quick",
         ],
-        source: 'general',
+        source: "general",
       });
     }
 
-    // Extract item names from order history
     const itemNames = [];
     orders.forEach((order) => {
       order.items.forEach((item) => {
@@ -169,25 +174,23 @@ exports.getMyKeywords = async (req, res) => {
       });
     });
 
-    // Build keyword suggestions from item names + quality descriptors
     const qualityWords = [
-      'delicious', 'fresh', 'crispy', 'spicy', 'flavourful',
-      'generous', 'portions', 'packaging', 'service', 'quick',
-      'tasty', 'aromatic', 'perfectly cooked', 'value',
+      "delicious", "fresh", "crispy", "spicy", "flavourful",
+      "generous", "portions", "packaging", "service", "quick",
+      "tasty", "aromatic", "value",
     ];
 
-    // Extract meaningful words from item names
     const itemWords = [...new Set(
-      itemNames
-        .join(' ')
-        .split(/\s+/)
-        .filter((w) => w.length > 3)
+      itemNames.join(" ").split(/\s+/).filter((w) => w.length > 3)
     )];
 
-    // Mix item-specific words with quality descriptors
     const keywords = [...new Set([...itemWords, ...qualityWords])].slice(0, 10);
 
-    res.json({ keywords, source: 'order-history', itemsOrdered: [...new Set(itemNames)] });
+    res.json({
+      keywords,
+      source: "order-history",
+      itemsOrdered: [...new Set(itemNames)],
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

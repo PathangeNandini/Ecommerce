@@ -61,5 +61,6 @@ paymentDetails: {
 // Index for fast lookup of orders by user
 orderSchema.index({ userId: 1, createdAt: -1 });
 orderSchema.index({ restaurantId: 1, status: 1 });
-
+orderSchema.index({ courierId: 1, status: 1 });
+orderSchema.index({ status: 1, createdAt: -1 });
 module.exports = mongoose.model('Order', orderSchema);

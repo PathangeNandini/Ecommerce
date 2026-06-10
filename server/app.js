@@ -32,6 +32,14 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = dirname(__filename);
+
+// Serve uploaded review images
+app.use("/uploads", express.static(join(__dirname, "uploads")));
 
 // Routes
 app.use("/api/auth",         authRoutes);

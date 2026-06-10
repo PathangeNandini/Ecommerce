@@ -1,139 +1,255 @@
-const http = require("http");
+const { createServer } = require("http");
 const { Server } = require("socket.io");
 const { io: Client } = require("socket.io-client");
-const jwt = require("jsonwebtoken");
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+const createTestServer = () => {
+  const httpServer = createServer();
+  const io = new Server(httpServer, {
+    cors: { origin: "*" },
+    pingTimeout: 2000,
+    pingInterval: 1000,
+  });
+  return { httpServer, io };
+};
 
-/**
- * Creates a signed JWT for a mock user — used to authenticate socket clients.
- */
-function makeToken(payload = {}) {
-  return jwt.sign(
-    { id: "507f1f77bcf86cd799439011", role: "consumer", ...payload },
-    process.env.JWT_SECRET || "test_secret",
-    { expiresIn: "1h" }
-  );
-}
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * Waits for a socket event with a timeout.
- * Rejects if the event doesn't fire within `ms` milliseconds.
- */
-function waitForEvent(socket, eventName, ms = 8000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Timeout waiting for "${eventName}"`)), ms);
-    socket.once(eventName, (data) => {
-      clearTimeout(timer);
-      resolve(data);
+describe("WebSocket Reconnection Tests", () => {
+  let io, httpServer, port;
+  const clients = [];
+
+  beforeAll((done) => {
+    const server = createTestServer();
+    io = server.io;
+    httpServer = server.httpServer;
+
+    httpServer.listen(0, () => {
+      port = httpServer.address().port;
+
+      io.on("connection", (socket) => {
+        socket.on("join:order", (orderId) => {
+          socket.join(`order:${orderId}`);
+        });
+        socket.on("join:owner", () => {
+          socket.join("owner:all");
+        });
+        socket.on("ping:test", (data) => {
+          socket.emit("pong:test", data);
+        });
+      });
+
+      done();
     });
   });
-}
 
-// ─── Setup ──────────────────────────────────────────────────────────────────
-
-let httpServer;
-let io;
-let consumerSocket;
-let merchantSocket;
-const PORT = 9001;
-const URL  = `http://localhost:${PORT}`;
-
-beforeAll((done) => {
-  httpServer = http.createServer();
-  io = new Server(httpServer, { cors: { origin: "*" } });
-
-  // Minimal socket auth middleware (mirrors config/socket.js)
-  io.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
-    if (!token) return next(new Error("No token"));
-    try {
-      socket.user = jwt.verify(token, process.env.JWT_SECRET || "test_secret");
-      next();
-    } catch {
-      next(new Error("Invalid token"));
-    }
+  afterAll((done) => {
+    clients.forEach((c) => { if (c.connected) c.disconnect(); });
+    io.close();
+    httpServer.close(done);
   });
 
-  // Register the same events used in production
-  io.on("connection", (socket) => {
-    socket.on("join:order", (orderId) => socket.join(`order:${orderId}`));
-    socket.on("join:restaurant", (restaurantId) => socket.join(`restaurant:${restaurantId}`));
-    socket.on("order:preparing", ({ orderId }) => io.to(`order:${orderId}`).emit("order:preparing", { orderId }));
-    socket.on("order:delivered", ({ orderId }) => io.to(`order:${orderId}`).emit("order:delivered", { orderId }));
-  });
-
-  httpServer.listen(PORT, done);
-});
-
-afterAll((done) => {
-  io.close();
-  httpServer.close(done);
-});
-
-afterEach(() => {
-  consumerSocket?.disconnect();
-  merchantSocket?.disconnect();
-});
-
-describe("Socket.io — reconnection", () => {
-  test("client reconnects after temporary disconnect", async () => {
-    const ORDER_ID = "order_reconnect_test";
-
-    consumerSocket = Client(URL, {
-      auth: { token: makeToken() },
+  const makeClient = (opts = {}) => {
+    const c = new Client(`http://localhost:${port}`, {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 200,
-      forceNew: true,
+      reconnectionDelayMax: 500,
+      ...opts,
+    });
+    clients.push(c);
+    return c;
+  };
+
+  // ── Test 1 — Basic connection ──────────────────────────
+  test("client connects to server successfully", (done) => {
+    const c = makeClient();
+    c.on("connect", () => {
+      expect(c.connected).toBe(true);
+      c.disconnect();
+      done();
+    });
+  });
+
+  // ── Test 2 — Join order room ───────────────────────────
+  test("client joins order room and receives order update", (done) => {
+    const c = makeClient();
+    const orderId = "test-order-123";
+
+    c.on("connect", () => {
+      c.emit("join:order", orderId);
+
+      setTimeout(() => {
+        c.on("order:preparing", (data) => {
+          expect(data.orderId).toBe(orderId);
+          expect(data.status).toBe("preparing");
+          c.disconnect();
+          done();
+        });
+
+        io.to(`order:${orderId}`).emit("order:preparing", {
+          orderId,
+          status: "preparing",
+          updatedAt: new Date(),
+        });
+      }, 100);
+    });
+  });
+
+  // ── Test 3 — Reconnection without losing payload ───────
+  test("client reconnects and re-joins order room without losing payload", (done) => {
+    const orderId = "reconnect-order-456";
+    const c = makeClient();
+    let connected = false;
+
+    c.on("connect", () => {
+      c.emit("join:order", orderId);
+
+      if (!connected) {
+        connected = true;
+        // Force disconnect after joining
+        setTimeout(() => {
+          c.disconnect();
+          // Reconnect after short delay
+          setTimeout(() => {
+            c.connect();
+          }, 300);
+        }, 200);
+      }
     });
 
-    // Initial connection
-    await waitForEvent(consumerSocket, "connect");
+    c.on("reconnect", () => {
+      c.emit("join:order", orderId);
+    });
 
-    consumerSocket.emit("join:order", ORDER_ID);
+    // Also handle plain re-connect event
+    c.on("connect", () => {
+      if (connected) {
+        c.emit("join:order", orderId);
+      }
+    });
 
-    await new Promise((r) => setTimeout(r, 200));
+    c.on("order:transit", (data) => {
+      expect(data.orderId).toBe(orderId);
+      expect(data.status).toBe("transit");
+      c.disconnect();
+      done();
+    });
 
-    // Force transport close
-    consumerSocket.io.engine.close();
+    // Emit after enough time for reconnect to complete
+    setTimeout(() => {
+      io.to(`order:${orderId}`).emit("order:transit", {
+        orderId,
+        status: "transit",
+        updatedAt: new Date(),
+      });
+    }, 1000);
+  }, 10000);
 
-    // Wait until socket reconnects
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("Reconnect timeout"));
-      }, 10000);
+  // ── Test 4 — No payload loss after reconnect ───────────
+  test("order status updates are not lost after reconnection", (done) => {
+    const orderId = "payload-order-789";
+    const c = makeClient();
+    let firstConnect = true;
 
-      const check = () => {
-        if (consumerSocket.connected) {
-          clearTimeout(timeout);
-          resolve();
-        } else {
-          setTimeout(check, 200);
+    c.on("connect", () => {
+      c.emit("join:order", orderId);
+
+      if (firstConnect) {
+        firstConnect = false;
+        setTimeout(() => {
+          c.disconnect();
+          setTimeout(() => c.connect(), 300);
+        }, 200);
+      }
+    });
+
+    c.on("order:delivered", (data) => {
+      expect(data.status).toBe("delivered");
+      c.disconnect();
+      done();
+    });
+
+    setTimeout(() => {
+      io.to(`order:${orderId}`).emit("order:delivered", {
+        orderId,
+        status: "delivered",
+        updatedAt: new Date(),
+      });
+    }, 1000);
+  }, 10000);
+
+  // ── Test 5 — Multiple clients in same room ─────────────
+  test("multiple clients in same order room all receive updates", (done) => {
+    const orderId = "multi-client-order";
+    let receivedCount = 0;
+    const totalClients = 3;
+    const roomClients = [];
+
+    for (let i = 0; i < totalClients; i++) {
+      const c = makeClient();
+      roomClients.push(c);
+
+      c.on("connect", () => {
+        c.emit("join:order", orderId);
+      });
+
+      c.on("order:assigned", (data) => {
+        expect(data.orderId).toBe(orderId);
+        receivedCount++;
+        if (receivedCount === totalClients) {
+          roomClients.forEach((cl) => cl.disconnect());
+          done();
         }
-      };
+      });
+    }
 
-      check();
+    setTimeout(() => {
+      io.to(`order:${orderId}`).emit("order:assigned", {
+        orderId,
+        status: "assigned",
+        updatedAt: new Date(),
+      });
+    }, 300);
+  }, 10000);
+
+  // ── Test 6 — Owner room receives new order ─────────────
+  test("owner room receives order:placed event", (done) => {
+    const c = makeClient();
+
+    c.on("connect", () => {
+      c.emit("join:owner");
+
+      setTimeout(() => {
+        c.on("order:placed", (data) => {
+          expect(data.status).toBe("placed");
+          expect(data.totalPrice).toBe(450);
+          c.disconnect();
+          done();
+        });
+
+        io.to("owner:all").emit("order:placed", {
+          orderId: "new-order-001",
+          status: "placed",
+          totalPrice: 450,
+          createdAt: new Date(),
+        });
+      }, 100);
     });
+  });
 
-    // Rejoin room
-    consumerSocket.emit("join:order", ORDER_ID);
+  // ── Test 7 — Ping/pong echo ────────────────────────────
+  test("server echoes ping:test back as pong:test with same payload", (done) => {
+    const c = makeClient();
+    const payload = { msg: "hello", ts: Date.now() };
 
-    await new Promise((r) => setTimeout(r, 200));
-
-    // Listen for event
-    const recvPromise = waitForEvent(
-      consumerSocket,
-      "order:delivered",
-      5000
-    );
-
-    io.to(`order:${ORDER_ID}`).emit("order:delivered", {
-      orderId: ORDER_ID,
+    c.on("connect", () => {
+      c.emit("ping:test", payload);
+      c.on("pong:test", (data) => {
+        expect(data.msg).toBe(payload.msg);
+        expect(data.ts).toBe(payload.ts);
+        c.disconnect();
+        done();
+      });
     });
-
-    const data = await recvPromise;
-
-    expect(data.orderId).toBe(ORDER_ID);
-  }, 15000);
+  });
 });

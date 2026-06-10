@@ -27,6 +27,10 @@ const reviewSchema = new mongoose.Schema(
       required: true,
       minlength: 10,
     },
+    photoUrl: {
+      type: String,
+      default: null,
+    },
     pointsAwarded: {
       type: Number,
       default: 0,
@@ -35,7 +39,7 @@ const reviewSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// One review per user per order
 reviewSchema.index({ orderId: 1, userId: 1 }, { unique: true, sparse: true });
-
+reviewSchema.index({ restaurantId: 1, createdAt: -1 });
+reviewSchema.index({ userId: 1 });
 export default mongoose.model("Review", reviewSchema);

@@ -9,26 +9,26 @@ export default function Review() {
   const { restaurantId } = useParams();
   const navigate = useNavigate();
 
-  const [rating, setRating] = useState(0);
-  const [hover, setHover] = useState(0);
-  const [text, setText] = useState("");
+  const [rating, setRating]   = useState(0);
+  const [hover, setHover]     = useState(0);
+  const [text, setText]       = useState("");
   const [keywords, setKeywords] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
-  const [error, setError] = useState("");
-  const [points, setPoints] = useState(0);
+  const [photo, setPhoto]     = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [error, setError]     = useState("");
+  const [points, setPoints]   = useState(0);
 
-  // Load existing reviews and keyword suggestions
   useEffect(() => {
     api.get(`/reviews/${restaurantId}`).then(({ data }) => setReviews(data));
     api.get(`/reviews/my-keywords/${restaurantId}`)
-  .then(({ data }) => setKeywords(data.keywords || []))
-  .catch(() => {
-    // fall back to general keywords
-    api.get(`/reviews/keywords/${restaurantId}`)
-      .then(({ data }) => setKeywords(data.keywords || []));
-  });
+      .then(({ data }) => setKeywords(data.keywords || []))
+      .catch(() => {
+        api.get(`/reviews/keywords/${restaurantId}`)
+          .then(({ data }) => setKeywords(data.keywords || []));
+      });
   }, [restaurantId]);
 
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
@@ -40,6 +40,7 @@ export default function Review() {
     else if (meaningfulWords >= 10) p += 10;
     else if (meaningfulWords >= 5) p += 5;
     if (rating === 5) p += 5;
+    if (photo) p += 15;
     return p;
   };
 
@@ -55,18 +56,23 @@ export default function Review() {
     setError("");
 
     try {
-      const { data } = await api.post("/reviews", {
-        restaurantId,
-        rating,
-        text,
+      const formData = new FormData();
+      formData.append("restaurantId", restaurantId);
+      formData.append("rating", rating);
+      formData.append("text", text);
+      if (photo) formData.append("photo", photo);
+
+      const { data } = await api.post("/reviews", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       setPoints(data.pointsAwarded);
       setSuccess(data.message);
       setRating(0);
       setText("");
+      setPhoto(null);
+      setPreview(null);
 
-      // Reload reviews
       const updated = await api.get(`/reviews/${restaurantId}`);
       setReviews(updated.data);
     } catch (err) {
@@ -79,7 +85,10 @@ export default function Review() {
   return (
     <div className="review-page">
       <div className="review-container">
-        <h2>Rate & Review</h2>
+        <div className="review-top-bar">
+          <button className="review-back" onClick={() => navigate(-1)}>← Back</button>
+          <h2>Rate & Review</h2>
+        </div>
 
         {/* Star Rating */}
         <div className="star-row">
@@ -104,7 +113,7 @@ export default function Review() {
         {/* Keyword suggestions */}
         {keywords.length > 0 && (
           <div className="keywords-section">
-            <p className="keywords-label">💡 Popular keywords — tap to add:</p>
+            <p className="keywords-label">💡 Suggested keywords — tap to add:</p>
             <div className="keywords-list">
               {keywords.map((kw) => (
                 <button key={kw} className="keyword-chip" onClick={() => handleKeyword(kw)}>
@@ -115,7 +124,7 @@ export default function Review() {
           </div>
         )}
 
-        {/* Review text */}
+        {/* Review textarea */}
         <textarea
           className="review-textarea"
           placeholder="Share your experience... (min 10 characters)"
@@ -123,6 +132,36 @@ export default function Review() {
           onChange={(e) => setText(e.target.value)}
           rows={5}
         />
+
+        {/* Photo upload */}
+        <div className="photo-upload-section">
+          <label className="photo-upload-label">
+            📷 Add a photo <span className="photo-bonus">+15 points</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="photo-input"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  setPhoto(file);
+                  setPreview(URL.createObjectURL(file));
+                }
+              }}
+            />
+          </label>
+          {preview && (
+            <div className="photo-preview-wrap">
+              <img src={preview} alt="preview" className="photo-preview" />
+              <button
+                className="photo-remove"
+                onClick={() => { setPhoto(null); setPreview(null); }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Word count + points preview */}
         <div className="review-meta">
@@ -160,6 +199,13 @@ export default function Review() {
                   </span>
                 </div>
                 <p className="review-text">{r.text}</p>
+                {r.photoUrl && (
+                  <img
+                    src={`${import.meta.env.VITE_API_URL || "http://localhost:5000"}${r.photoUrl}`}
+                    alt="review"
+                    className="review-photo"
+                  />
+                )}
                 <span className="review-date">
                   {new Date(r.createdAt).toLocaleDateString()}
                 </span>

@@ -204,3 +204,25 @@
   font-size: 0.8rem;
   color: #aaa;
 }
+.review-top-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.review-top-bar h2 {
+  font-size: 1.6rem;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.review-back {
+  background: none;
+  border: none;
+  color: #ff6b00;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
