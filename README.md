@@ -29,9 +29,6 @@ This project demonstrates how modern food delivery platforms work internally usi
 **Courier Dashboard**
 ![Courier](https://github.com/user-attachments/assets/883519ce-7954-4629-9d9e-4a049244a6d2)
 
-**Active Delivery**
-![Active](https://github.com/user-attachments/assets/63806d8d-6128-4915-bafe-d154563f385d)
-
 **Order Status**
 ![Status](https://github.com/user-attachments/assets/6661170e-b144-40fd-9e02-a74fa7b5e9c6)
 
