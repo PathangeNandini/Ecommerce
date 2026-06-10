@@ -8,27 +8,32 @@ This project demonstrates how modern food delivery platforms work internally usi
 
 ## 📸 Screenshots
 
-| Consumer Home | Restaurant Detail | Order Tracking |
-|---|---|---|
-|[Home](<img width="1916" height="898" alt="image" src="https://github.com/user-attachments/assets/95bdacd4-563a-456c-b98f-24eac24c95a6" />)
-|[Restaurant](<img width="1913" height="932" alt="image" src="https://github.com/user-attachments/assets/d73dd55b-5a54-4e26-8d85-dacaed43aa68" />)
-|[Tracking](<img width="1911" height="924" alt="image" src="https://github.com/user-attachments/assets/514b7a02-1a3c-488e-83ad-84a9f3727356" />)
-|
+**Consumer Home**
+![Home](https://github.com/user-attachments/assets/95bdacd4-563a-456c-b98f-24eac24c95a6)
 
-| Cart Sidebar | Conflict Modal | Owner Dashboard |
-|---|---|---|
-|[Cart](<img width="466" height="912" alt="image" src="https://github.com/user-attachments/assets/c5d35fc5-0b67-4516-bfff-a8a8352bbf5b" />)
-|[Conflict](<img width="1197" height="765" alt="image" src="https://github.com/user-attachments/assets/ac775c79-84e8-4cdf-8d18-9fbe28eb0009" />)
-[Owner](<img width="1623" height="432" alt="image" src="https://github.com/user-attachments/assets/c6bacbc1-cbc7-448c-8887-f18ff3d35a8a" />)
-|
+**Restaurant Detail**
+![Restaurant](https://github.com/user-attachments/assets/d73dd55b-5a54-4e26-8d85-dacaed43aa68)
 
-| Courier Dashboard | Active Delivery | Order Status |
-|---|---|---|
-|[Courier](<img width="1115" height="829" alt="image" src="https://github.com/user-attachments/assets/883519ce-7954-4629-9d9e-4a049244a6d2" />)
-[Active](<img width="1122" height="761" alt="image" src="https://github.com/user-attachments/assets/63806d8d-6128-4915-bafe-d154563f385d" />)
-[Status](<img width="775" height="783" alt="image" src="https://github.com/user-attachments/assets/6661170e-b144-40fd-9e02-a74fa7b5e9c6" />)
-|
+**Order Tracking**
+![Tracking](https://github.com/user-attachments/assets/514b7a02-1a3c-488e-83ad-84a9f3727356)
 
+**Cart Sidebar**
+![Cart](https://github.com/user-attachments/assets/c5d35fc5-0b67-4516-bfff-a8a8352bbf5b)
+
+**Conflict Modal**
+![Conflict](https://github.com/user-attachments/assets/ac775c79-84e8-4cdf-8d18-9fbe28eb0009)
+
+**Owner Dashboard**
+![Owner](https://github.com/user-attachments/assets/c6bacbc1-cbc7-448c-8887-f18ff3d35a8a)
+
+**Courier Dashboard**
+![Courier](https://github.com/user-attachments/assets/883519ce-7954-4629-9d9e-4a049244a6d2)
+
+**Active Delivery**
+![Active](https://github.com/user-attachments/assets/63806d8d-6128-4915-bafe-d154563f385d)
+
+**Order Status**
+![Status](https://github.com/user-attachments/assets/6661170e-b144-40fd-9e02-a74fa7b5e9c6)
 
 ---
 
@@ -315,9 +320,9 @@ Frontend runs on `http://localhost:5173` — Backend runs on `http://localhost:5
 
 | Bug | Root Cause | Fix |
 |-----|-----------|-----|
-| Cart items not adding | `restaurant._id` was undefined due to API response shape mismatch | Used `data.restaurant ?? data` fallback |
+| Cart items not adding | `restaurant._id` undefined due to API response shape mismatch | Used `data.restaurant ?? data` fallback |
 | Cart state corrupted after opening sidebar | `CartSidebar` passed `null` as `restaurantId` to `addItem` | Passed real `restaurantId` from context |
-| `window.confirm` was browser default | Confirmation dialog was inside `CartContext` | Moved to UI with custom styled modal |
+| `window.confirm` ugly browser dialog | Confirmation dialog was inside `CartContext` | Moved to UI with custom styled modal |
 | Restaurants not loading | Location denied with no fallback | Added Chennai coordinates as default fallback |
 | Orders not showing in owner dashboard | Dashboard filtered by single `ownerId` | Updated to fetch all orders across restaurants |
 | Order item price showing NaN | `item.price` undefined in order snapshot | Used `item.totalPrice ?? item.price * item.quantity` |
