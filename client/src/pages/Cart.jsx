@@ -5,28 +5,35 @@ import { useCart } from "../context/CartContext";
 import "./Cart.css";
 
 export default function Cart() {
-  const { items, restaurantId, restaurantName, total, removeItem, clearCart } = useCart();
+  const { itemsByRestaurant, total, removeItem, clearCart } = useCart();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrders = async () => {
     setError("");
     setLoading(true);
     try {
-      // Use menuItemId from CartContext (our format)
-      // Send qty (not quantity) — matches order.controller.js
-      const payload = {
-        restaurantId,
-        items: items.map((i) => ({
-          menuItemId: i.menuItemId || i._id,  // handle both formats
-          qty: i.quantity
-        })),
-      };
+      // Place one order per restaurant
+      const orderPromises = itemsByRestaurant.map(({ restaurantId, items }) =>
+        api.post("/orders", {
+          restaurantId,
+          items: items.map((i) => ({
+            menuItemId: i.menuItemId || i._id,
+            qty: i.quantity,
+          })),
+        })
+      );
 
-      const { data } = await api.post("/orders", payload);
+      const results = await Promise.all(orderPromises);
       clearCart();
-      navigate(`/order/${data._id}`);
+
+      // Navigate to first order tracking page
+      if (results.length === 1) {
+        navigate(`/order/${results[0].data._id}`);
+      } else {
+        navigate("/profile"); // multiple orders → go to profile/orders page
+      }
     } catch (err) {
       setError(
         err.response?.data?.msg ||
@@ -38,7 +45,7 @@ export default function Cart() {
     }
   };
 
-  if (items.length === 0) {
+  if (itemsByRestaurant.length === 0) {
     return (
       <div className="cart-page empty">
         <h2>Your cart is empty 🛒</h2>
@@ -55,50 +62,55 @@ export default function Cart() {
       </div>
 
       <div className="cart-page-content">
-        {/* Order summary */}
+        {/* Order summary — grouped by restaurant */}
         <div className="order-summary">
-          <h2>Order from <span>{restaurantName}</span></h2>
+          {itemsByRestaurant.map(({ restaurantId, restaurantName, items, total: restTotal }) => (
+            <div key={restaurantId} className="restaurant-order-group">
+              <h2>Order from <span>{restaurantName}</span></h2>
 
-          <div className="order-items">
-            {items.map((item) => (
-              <div key={item.menuItemId || item._id} className="order-item-row">
-                <div className="order-item-left">
-                  <span className="order-item-qty">{item.quantity}×</span>
-                  <span className="order-item-name">{item.name}</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <span className="order-item-subtotal">
-                    ₹{(item.price * item.quantity).toFixed(2)}
-                  </span>
-                  <button
-                    onClick={() => removeItem(item.menuItemId || item._id)}
-                    style={{
-                      background: "#FEE2E2", color: "#DC2626", border: "none",
-                      borderRadius: "50%", width: 26, height: 26, cursor: "pointer", fontSize: 16
-                    }}
-                  >−</button>
-                </div>
+              <div className="order-items">
+                {items.map((item) => (
+                  <div key={`${item._id}-${restaurantId}`} className="order-item-row">
+                    <div className="order-item-left">
+                      <span className="order-item-qty">{item.quantity}×</span>
+                      <span className="order-item-name">{item.name}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <span className="order-item-subtotal">
+                        ₹{(item.price * item.quantity).toFixed(2)}
+                      </span>
+                      <button
+                        onClick={() => removeItem(item._id, restaurantId)}
+                        style={{
+                          background: "#FEE2E2", color: "#DC2626", border: "none",
+                          borderRadius: "50%", width: 26, height: 26, cursor: "pointer", fontSize: 16
+                        }}
+                      >−</button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="order-divider" />
+              <div className="order-divider" />
+              <div className="order-row">
+                <span>Subtotal</span>
+                <span>₹{restTotal.toFixed(2)}</span>
+              </div>
+              <div className="order-row">
+                <span>Delivery fee</span>
+                <span className="free-label">FREE</span>
+              </div>
+            </div>
+          ))}
 
-          <div className="order-row">
-            <span>Subtotal</span>
-            <span>₹{total.toFixed(2)}</span>
-          </div>
-          <div className="order-row">
-            <span>Delivery fee</span>
-            <span className="free-label">FREE</span>
-          </div>
+          <div className="order-divider" style={{ marginTop: "1rem" }} />
           <div className="order-row total-row">
-            <span>Total</span>
+            <span>Total ({itemsByRestaurant.length} {itemsByRestaurant.length > 1 ? "restaurants" : "restaurant"})</span>
             <span>₹{total.toFixed(2)}</span>
           </div>
         </div>
 
-        {/* Payment mock */}
+        {/* Payment */}
         <div className="payment-section">
           <h2>Payment</h2>
           <div className="payment-mock">
@@ -109,14 +121,20 @@ export default function Cart() {
             </div>
           </div>
 
+          {itemsByRestaurant.length > 1 && (
+            <div className="multi-order-note">
+              📦 {itemsByRestaurant.length} separate orders will be placed
+            </div>
+          )}
+
           {error && <div className="checkout-error">{error}</div>}
 
           <button
             className="place-order-btn"
-            onClick={handlePlaceOrder}
+            onClick={handlePlaceOrders}
             disabled={loading}
           >
-            {loading ? "Placing Order…" : `Place Order · ₹${total.toFixed(2)}`}
+            {loading ? "Placing Orders…" : `Place Order${itemsByRestaurant.length > 1 ? "s" : ""} · ₹${total.toFixed(2)}`}
           </button>
 
           <button

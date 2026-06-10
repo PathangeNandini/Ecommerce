@@ -3,7 +3,7 @@ import { useCart } from "../context/CartContext";
 import "./CartSidebar.css";
 
 export default function CartSidebar({ isOpen, onClose }) {
-  const { itemsByRestaurant, total, addItem, removeItem, clearCart, restaurants } = useCart();
+  const { items, restaurantId, restaurantName, total, addItem, removeItem, clearCart } = useCart();
   const navigate = useNavigate();
 
   const handleCheckout = () => {
@@ -11,18 +11,20 @@ export default function CartSidebar({ isOpen, onClose }) {
     navigate("/cart");
   };
 
-  const totalItems = itemsByRestaurant.reduce((s, g) => s + g.items.reduce((ss, i) => ss + i.quantity, 0), 0);
-
   return (
     <>
       {isOpen && <div className="cart-overlay" onClick={onClose} />}
       <div className={`cart-sidebar ${isOpen ? "open" : ""}`}>
         <div className="cart-header">
-          <h2>Your Cart {totalItems > 0 && <span className="cart-count-badge">{totalItems}</span>}</h2>
+          <h2>Your Cart</h2>
           <button className="cart-close" onClick={onClose}>✕</button>
         </div>
 
-        {itemsByRestaurant.length === 0 ? (
+        {restaurantName && (
+          <p className="cart-restaurant">From: <strong>{restaurantName}</strong></p>
+        )}
+
+        {items.length === 0 ? (
           <div className="cart-empty">
             <span>🛒</span>
             <p>Your cart is empty</p>
@@ -31,22 +33,18 @@ export default function CartSidebar({ isOpen, onClose }) {
         ) : (
           <>
             <div className="cart-items">
-              {itemsByRestaurant.map(({ restaurantId, restaurantName, items }) => (
-                <div key={restaurantId} className="cart-restaurant-group">
-                  <p className="cart-restaurant-label">🏪 {restaurantName}</p>
-                  {items.map((item) => (
-                    <div key={`${item._id}-${restaurantId}`} className="cart-item">
-                      <div className="cart-item-info">
-                        <span className="cart-item-name">{item.name}</span>
-                        <span className="cart-item-price">₹{item.price}</span>
-                      </div>
-                      <div className="cart-item-qty">
-                        <button className="qty-btn" onClick={() => removeItem(item._id, restaurantId)}>−</button>
-                        <span>{item.quantity}</span>
-                        <button className="qty-btn" onClick={() => addItem(item, restaurantId, restaurantName)}>+</button>
-                      </div>
-                    </div>
-                  ))}
+              {items.map((item) => (
+                <div key={item._id} className="cart-item">
+                  <div className="cart-item-info">
+                    <span className="cart-item-name">{item.name}</span>
+                    <span className="cart-item-price">₹{item.price}</span>
+                  </div>
+                  <div className="cart-item-qty">
+                    <button className="qty-btn" onClick={() => removeItem(item._id)}>−</button>
+                    <span>{item.quantity}</span>
+                    {/* ← FIX: pass restaurantId instead of null */}
+                    <button className="qty-btn" onClick={() => addItem(item, restaurantId, restaurantName)}>+</button>
+                  </div>
                 </div>
               ))}
             </div>

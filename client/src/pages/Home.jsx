@@ -7,8 +7,6 @@ import "./Home.css";
 
 const CUISINES = ["All", "South Indian", "Biryani", "Chinese", "Fast Food", "North Indian", "Seafood", "Chettinad", "Cafe", "Desserts", "Italian"];
 
-// Using Foodish API (free, no auth, reliable food images) + fallbacks
-// Per-restaurant images (matched by name keywords)
 const RESTAURANT_IMAGES = {
   "Murugan Idli Shop":       "https://images.pexels.com/photos/5560763/pexels-photo-5560763.jpeg?auto=compress&cs=tinysrgb&w=400",
   "Saravana Bhavan":         "https://images.pexels.com/photos/4331489/pexels-photo-4331489.jpeg?auto=compress&cs=tinysrgb&w=400",
@@ -63,6 +61,9 @@ const RESTAURANT_IMAGES = {
 };
 
 const FALLBACK_IMAGE = "https://images.pexels.com/photos/67468/pexels-photo-67468.jpeg?auto=compress&cs=tinysrgb&w=400";
+
+// Chennai city center — used as fallback when location is denied
+const CHENNAI = { lat: 13.0827, lng: 80.2707 };
 
 function getDeliveryTime(distanceKm) {
   if (!distanceKm) return "20–30 min";
@@ -124,7 +125,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!navigator.geolocation) { setError("Geolocation not supported"); setLocating(false); return; }
+    const defaultCoords = CHENNAI;
+
+    if (!navigator.geolocation) {
+      // No geolocation support — fall back to Chennai
+      setCoords(defaultCoords);
+      setLocating(false);
+      fetchRestaurants(defaultCoords, { cuisine: "All", minRating: 0, radius: 1000 }, 0);
+      return;
+    }
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -132,7 +142,12 @@ export default function Home() {
         setLocating(false);
         fetchRestaurants(c, { cuisine: "All", minRating: 0, radius: 1000 }, 0);
       },
-      () => { setLocating(false); setError("Could not detect your location. Please allow location access."); },
+      () => {
+        // Location denied or failed — fall back to Chennai silently
+        setCoords(defaultCoords);
+        setLocating(false);
+        fetchRestaurants(defaultCoords, { cuisine: "All", minRating: 0, radius: 1000 }, 0);
+      },
       { timeout: 10000, maximumAge: 60000 }
     );
   }, []);
@@ -242,7 +257,7 @@ export default function Home() {
         <div className="nav-actions">
           {user && <span className="nav-user">Hey, {user.name?.split(" ")[0] || "there"} 👋</span>}
           <Link to="/profile" className="nav-link">Profile</Link>
-          {user?.role === "restaurant" && <Link to="/merchant" className="nav-link">Dashboard</Link>}
+          {user?.role === "restaurant" && <Link to="/owner/dashboard" className="nav-link">Dashboard</Link>}
           <button className="nav-cart" onClick={() => setCartOpen(true)}>🛒 Cart</button>
           <button className="nav-logout" onClick={logout}>Logout</button>
         </div>

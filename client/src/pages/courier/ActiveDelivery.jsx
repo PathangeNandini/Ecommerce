@@ -2,15 +2,15 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../services/api";
 import { useSocket } from "../../hooks/useSocket";
-import Navbar from "../../components/Navbar";
 import "./Courier.css";
 
 const STEPS = [
-  { key: "assigned", label: "Order Accepted",    icon: "✅" },
-  { key: "transit",  label: "Picked Up",         icon: "📦" },
-  { key: "delivered",label: "Delivered",         icon: "🏁" },
+  { status: "placed",    label: "Order Placed",      icon: "🧾" },
+  { status: "preparing", label: "Preparing",          icon: "👨‍🍳" },
+  { status: "assigned",  label: "Courier Assigned",   icon: "🛵" },
+  { status: "transit",   label: "On the Way",         icon: "🚀" },
+  { status: "delivered", label: "Delivered",          icon: "✅" },
 ];
-const IDX = Object.fromEntries(STEPS.map((s, i) => [s.key, i]));
 
 export default function ActiveDelivery() {
   const { id } = useParams();
@@ -27,82 +27,118 @@ export default function ActiveDelivery() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const advance = async () => {
-    if (!order) return;
-    const curr = IDX[order.status] ?? 0;
-    if (curr >= STEPS.length - 1) return;
-    const next = STEPS[curr + 1].key;
+  useEffect(() => {
+    if (!socket || !id) return;
+    socket.emit("join:order", id);
+    socket.on("order:transit", ({ status }) => {
+      setOrder((o) => o ? { ...o, status } : o);
+    });
+    socket.on("order:delivered", ({ status }) => {
+      setOrder((o) => o ? { ...o, status } : o);
+    });
+    return () => {
+      socket.off("order:transit");
+      socket.off("order:delivered");
+    };
+  }, [socket, id]);
+
+  const updateStatus = async (newStatus) => {
     setUpdating(true);
     try {
-      await api.patch(`/orders/${id}/status`, { status: next });
-      socket?.emit(`order:${next}`, { orderId: id });
-      setOrder((o) => ({ ...o, status: next }));
-      if (next === "delivered") {
-        setTimeout(() => navigate("/delivery/history"), 1500);
+      const { data } = await api.patch(`/orders/${id}/status`, { status: newStatus });
+      setOrder(data);
+      if (newStatus === "delivered") {
+        setTimeout(() => navigate("/delivery"), 2000);
       }
-    } catch { /* silent */ } finally { setUpdating(false); }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUpdating(false);
+    }
   };
 
-  if (loading) return <><Navbar /><div className="owner-loading">Loading order…</div></>;
-  if (!order)  return <><Navbar /><div className="owner-loading">Order not found.</div></>;
+  if (loading) return <div className="courier-page"><div className="courier-loading">Loading order…</div></div>;
+  if (!order) return <div className="courier-page"><div className="courier-loading">Order not found.</div></div>;
 
-  const stepIdx   = IDX[order.status] ?? 0;
-  const nextStep  = STEPS[stepIdx + 1];
-  const isFinished = order.status === "delivered";
+  const currentStep = STEPS.findIndex(s => s.status === order.status);
+
+  const getNextAction = () => {
+    if (order.status === "assigned") return { label: "Mark On the Way 🚀", next: "transit" };
+    if (order.status === "transit")  return { label: "Mark Delivered ✅", next: "delivered" };
+    return null;
+  };
+
+  const action = getNextAction();
 
   return (
     <div className="courier-page">
-      <Navbar />
-      <div className="courier-container" style={{ maxWidth: 560 }}>
-        <button className="back-link" onClick={() => navigate("/delivery")}>← Back</button>
-        <h1>Active Delivery</h1>
-        <p className="courier-sub">Order #{order._id?.slice(-6).toUpperCase()}</p>
+      <nav className="courier-nav">
+        <div className="courier-brand">🚴 Active Delivery</div>
+        <button className="courier-home-btn" onClick={() => navigate("/delivery")}>← Back</button>
+      </nav>
 
-        {/* Stepper */}
-        <div className="active-stepper">
+      <div className="courier-content">
+
+        {/* Order Ref */}
+        <div className="active-order-header">
+          <h2>Order #{order._id?.slice(-6).toUpperCase()}</h2>
+          <span className={`status-badge status-${order.status}`}>
+            {STEPS.find(s => s.status === order.status)?.icon} {order.status.toUpperCase()}
+          </span>
+        </div>
+
+        {/* Progress Tracker */}
+        <div className="tracker-bar">
           {STEPS.map((step, i) => (
-            <div key={step.key} className={`a-step ${i <= stepIdx ? "done" : ""} ${i === stepIdx ? "current" : ""}`}>
-              <div className="a-step-icon">{step.icon}</div>
-              <span className="a-step-label">{step.label}</span>
-              {i < STEPS.length - 1 && <div className={`a-step-line ${i < stepIdx ? "filled" : ""}`} />}
+            <div key={step.status} className="tracker-step">
+              <div className={`tracker-circle ${i <= currentStep ? "done" : ""} ${i === currentStep ? "active" : ""}`}>
+                {step.icon}
+              </div>
+              <span className={`tracker-label ${i === currentStep ? "active-label" : ""}`}>
+                {step.label}
+              </span>
+              {i < STEPS.length - 1 && (
+                <div className={`tracker-line ${i < currentStep ? "done" : ""}`} />
+              )}
             </div>
           ))}
         </div>
 
-        {/* Order details */}
-        <div className="active-card">
-          <div className="loc-row" style={{ marginBottom: "1rem" }}>
-            <span className="loc-dot pickup" />
-            <div>
-              <p className="loc-label">Pick up from</p>
-              <p className="loc-name">{order.restaurantName ?? "Restaurant"}</p>
-              <p className="loc-addr">{order.restaurantAddress ?? ""}</p>
-            </div>
+        {/* Order Details */}
+        <div className="active-order-details">
+          <div className="detail-card">
+            <h3>🏪 Pick Up From</h3>
+            <p>{order.restaurantId?.name || "Restaurant"}</p>
+            <p className="detail-address">{order.restaurantId?.address}</p>
           </div>
-          <div className="loc-row">
-            <span className="loc-dot dropoff" />
-            <div>
-              <p className="loc-label">Deliver to</p>
-              <p className="loc-name">{order.customerName ?? "Customer"}</p>
-              <p className="loc-addr">{order.deliveryAddress ?? "Address on file"}</p>
-            </div>
+          <div className="detail-card">
+            <h3>📍 Deliver To</h3>
+            <p>{order.deliveryAddress || "Address not provided"}</p>
           </div>
-
-          <div className="active-items">
+          <div className="detail-card">
+            <h3>🛍️ Items</h3>
             {order.items?.map((item, i) => (
-              <span key={i} className="item-chip">{item.quantity}× {item.name}</span>
+              <p key={i}>{item.qty}× {item.name} — ₹{(item.price * item.qty).toFixed(2)}</p>
             ))}
+            <p className="order-total-line">Total: ₹{order.totalPrice?.toFixed(2)}</p>
           </div>
-          <div className="active-total">Total: ₹{order.totalPrice?.toFixed(2)}</div>
         </div>
 
-        {/* CTA */}
-        {isFinished ? (
-          <div className="delivered-banner">🎉 Delivered! Redirecting…</div>
-        ) : (
-          <button className="btn-accept-delivery" disabled={updating} onClick={advance}>
-            {updating ? "Updating…" : `Mark as ${nextStep?.label}`}
+        {/* Action Button */}
+        {action && order.status !== "delivered" && (
+          <button
+            className="btn-status-update"
+            onClick={() => updateStatus(action.next)}
+            disabled={updating}
+          >
+            {updating ? "Updating…" : action.label}
           </button>
+        )}
+
+        {order.status === "delivered" && (
+          <div className="delivered-banner">
+            ✅ Order Delivered! Redirecting…
+          </div>
         )}
       </div>
     </div>

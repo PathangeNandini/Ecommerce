@@ -19,7 +19,9 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(form.email, form.password);
-      navigate(user.role === "restaurant" ? "/merchant" : "/");
+      if (user.role === "restaurant") navigate("/owner/dashboard");
+      else if (user.role === "courier") navigate("/delivery");
+      else navigate("/");
     } catch (err) {
       setError(err.response?.data?.message || "Login failed. Check your credentials.");
     } finally {
@@ -33,7 +35,7 @@ export default function Login() {
         <div className="auth-brand">
           <span className="auth-logo">🍽️</span>
           <h1>Welcome back</h1>
-          <p>Sign in to continue ordering</p>
+          <p>Sign in to continue</p>
         </div>
 
         {error && <div className="auth-error">{error}</div>}
@@ -42,13 +44,9 @@ export default function Login() {
           <div className="field-group">
             <label htmlFor="email">Email</label>
             <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={form.email}
-              onChange={handleChange}
+              id="email" name="email" type="email"
+              autoComplete="email" required
+              value={form.email} onChange={handleChange}
               placeholder="you@example.com"
             />
           </div>
@@ -56,13 +54,9 @@ export default function Login() {
           <div className="field-group">
             <label htmlFor="password">Password</label>
             <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={form.password}
-              onChange={handleChange}
+              id="password" name="password" type="password"
+              autoComplete="current-password" required
+              value={form.password} onChange={handleChange}
               placeholder="••••••••"
             />
           </div>
@@ -71,6 +65,20 @@ export default function Login() {
             {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
+
+        <div className="auth-test-accounts">
+          <p className="test-title">TEST ACCOUNTS</p>
+          <div className="test-accounts-grid">
+            <button className="test-account-btn" onClick={() =>
+              setForm({ email: "customer@test.com", password: "password123" })}>
+              🛒 Customer
+            </button>
+            <button className="test-account-btn" onClick={() =>
+              setForm({ email: "owner@test.com", password: "password123" })}>
+              🏪 Restaurant
+            </button>
+          </div>
+        </div>
 
         <p className="auth-switch">
           Don't have an account? <Link to="/register">Create one</Link>

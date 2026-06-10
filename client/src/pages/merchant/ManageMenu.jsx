@@ -1,19 +1,19 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
-import Navbar from "../../components/Navbar";
 import "./Owner.css";
 
 const CATEGORIES = ["Starters", "Main Course", "Breads", "Rice", "Desserts", "Beverages", "Sides"];
-
 const EMPTY_FORM = { name: "", description: "", price: "", category: "Main Course" };
 
 export default function ManageMenu() {
-  const [items, setItems]       = useState([]);
-  const [form, setForm]         = useState(EMPTY_FORM);
-  const [editId, setEditId]     = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState("");
+  const navigate = useNavigate();
+  const [items, setItems]         = useState([]);
+  const [form, setForm]           = useState(EMPTY_FORM);
+  const [editId, setEditId]       = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState("");
   const [activeTab, setActiveTab] = useState("All");
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function ManageMenu() {
   }, []);
 
   const categories = ["All", ...CATEGORIES];
-  const displayed  = activeTab === "All" ? items : items.filter((i) => i.category === activeTab);
+  const displayed = activeTab === "All" ? items : items.filter((i) => i.category === activeTab);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -34,21 +34,17 @@ export default function ManageMenu() {
     setError(""); setSaving(true);
     try {
       if (editId) {
-        // Update existing
         const { data } = await api.put(`/menu/${editId}`, form);
         setItems((prev) => prev.map((i) => i._id === editId ? data : i));
         setEditId(null);
       } else {
-        // Create new
         const { data } = await api.post("/menu", form);
         setItems((prev) => [...prev, data]);
       }
       setForm(EMPTY_FORM);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to save item");
-    } finally {
-      setSaving(false);
-    }
+      setError(err.response?.data?.msg || err.response?.data?.message || "Failed to save item");
+    } finally { setSaving(false); }
   };
 
   const startEdit = (item) => {
@@ -74,15 +70,29 @@ export default function ManageMenu() {
     } catch { setError("Failed to delete item"); }
   };
 
-  if (loading) return <><Navbar /><div className="owner-loading">Loading menu…</div></>;
+  if (loading) return (
+    <div className="owner-page">
+      <nav className="owner-nav">
+        <div className="owner-brand">🏪 Owner Dashboard</div>
+        <button className="owner-home-btn" onClick={() => navigate("/merchant")}>← Dashboard</button>
+      </nav>
+      <div className="owner-loading">Loading menu…</div>
+    </div>
+  );
 
   return (
     <div className="owner-page">
-      <Navbar />
-      <div className="owner-container">
-        <h1>{editId ? "✏️ Edit Item" : "📋 Manage Menu"}</h1>
+      <nav className="owner-nav">
+        <div className="owner-brand">🏪 Owner Dashboard</div>
+        <button className="owner-home-btn" onClick={() => navigate("/merchant")}>← Dashboard</button>
+      </nav>
 
-        {/* ── Add / Edit Form ── */}
+      <div className="owner-container">
+        <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.75rem", fontWeight: 800, marginBottom: "1rem" }}>
+          {editId ? "✏️ Edit Item" : "📋 Manage Menu"}
+        </h1>
+
+        {/* Add / Edit Form */}
         <div className="menu-form-card">
           <h2>{editId ? "Edit Menu Item" : "Add New Item"}</h2>
           {error && <div className="form-error">{error}</div>}
@@ -117,7 +127,7 @@ export default function ManageMenu() {
           </form>
         </div>
 
-        {/* ── Category Tabs ── */}
+        {/* Category Tabs */}
         <div className="cat-tabs">
           {categories.map((c) => (
             <button key={c} className={`cat-tab ${activeTab === c ? "active" : ""}`} onClick={() => setActiveTab(c)}>
@@ -129,7 +139,7 @@ export default function ManageMenu() {
           ))}
         </div>
 
-        {/* ── Menu Items List ── */}
+        {/* Menu Items List */}
         {displayed.length === 0 ? (
           <div className="empty-section">No items in this category yet.</div>
         ) : (
@@ -141,21 +151,16 @@ export default function ManageMenu() {
                   <span className="menu-item-cat">{item.category}</span>
                   <span className="menu-item-desc">{item.description}</span>
                 </div>
-
                 <div className="menu-item-right">
                   <span className="menu-item-price">₹{item.price}</span>
-
-                  {/* Stock toggle */}
-                  <div className="stock-toggle" onClick={() => toggleStock(item)}>
-                    <div className={`stock-indicator ${item.available ? "in-stock" : "oos"}`}>
-                      {item.available ? "✅ In Stock" : "❌ Out of Stock"}
-                    </div>
-                  </div>
-
-                  <div className="menu-item-actions">
-                    <button className="btn-edit"   onClick={() => startEdit(item)}>Edit</button>
-                    <button className="btn-delete" onClick={() => deleteItem(item._id)}>Delete</button>
-                  </div>
+                  <button
+                    className={`stock-btn ${item.available ? "in-stock" : "oos"}`}
+                    onClick={() => toggleStock(item)}
+                  >
+                    {item.available ? "✅ In Stock" : "❌ Out of Stock"}
+                  </button>
+                  <button className="edit-btn" onClick={() => startEdit(item)}>✏️ Edit</button>
+                  <button className="delete-btn" onClick={() => deleteItem(item._id)}>🗑️</button>
                 </div>
               </div>
             ))}

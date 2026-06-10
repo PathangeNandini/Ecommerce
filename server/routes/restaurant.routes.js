@@ -1,23 +1,23 @@
 const express = require('express');
 const router = express.Router();
-
 const {
   getNearby,
   getById,
-  create
+  create,
+  getMyRestaurant,
+  toggleOpen,
 } = require('../controllers/restaurant.controller');
+const { protect, restaurantOnly } = require('../middleware/authMiddleware');
 
-const {
-  protect,
-  authorize,
-  restaurantOnly
-} = require('../middleware/authMiddleware');
-
-// Public routes
+// Public
 router.get('/nearby', getNearby);
-router.get('/:id', getById);
 
-// Protected — restaurant role only
-router.post('/', protect, authorize('restaurant'), create);
+// Protected — restaurant owner
+router.get('/mine',         protect, restaurantOnly, getMyRestaurant);
+router.patch('/mine/toggle',protect, restaurantOnly, toggleOpen);
+router.post('/',            protect, restaurantOnly, create);
+
+// Public (must be after /mine to avoid conflict)
+router.get('/:id', getById);
 
 module.exports = router;

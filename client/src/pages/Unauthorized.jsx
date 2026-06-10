@@ -7,9 +7,9 @@ export default function Unauthorized() {
   const navigate = useNavigate();
 
   const goHome = () => {
-    if (!user)                      return navigate("/login");
-    if (user.role === "restaurant") return navigate("/owner/dashboard");
-    if (user.role === "courier")    return navigate("/delivery");
+    if (!user)                       return navigate("/login");
+    if (user.role === "restaurant")  return navigate("/owner/dashboard");
+    if (user.role === "courier")     return navigate("/delivery");
     return navigate("/");
   };
 
