@@ -363,33 +363,39 @@
   margin-top: 12px;
 }
 
+/* ✅ FIX: Dark background for all cards to match dark theme */
 .earnings-card {
-  background: #fff;
+  background: #161616;
+  border: 1px solid #2a2a2a;
   border-radius: 14px;
   padding: 18px;
   text-align: center;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  color: #f0f0f0;
 }
 
 .earnings-card.primary {
   background: #ff6b00;
   color: #fff;
+  border-color: #ff6b00;
 }
 
 .earnings-value {
   font-size: 1.5rem;
   font-weight: 800;
   margin-bottom: 4px;
+  color: inherit;
 }
 
 .earnings-label {
   font-size: 0.8rem;
   font-weight: 600;
   opacity: 0.85;
+  color: inherit;
 }
 
 .earnings-sub {
   font-size: 0.75rem;
   opacity: 0.65;
   margin-top: 4px;
+  color: inherit;
 }

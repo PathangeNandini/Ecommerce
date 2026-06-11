@@ -9,36 +9,25 @@ export default function Review() {
   const { restaurantId } = useParams();
   const navigate = useNavigate();
 
-  const [rating, setRating] = useState(0);
-  const [hover, setHover] = useState(0);
-  const [text, setText] = useState("");
+  const [rating, setRating]     = useState(0);
+  const [hover, setHover]       = useState(0);
+  const [text, setText]         = useState("");
   const [keywords, setKeywords] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState("");
-  const [photo, setPhoto] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [error, setError] = useState("");
-  const [points, setPoints] = useState(0);
+  const [reviews, setReviews]   = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [success, setSuccess]   = useState("");
+  const [photo, setPhoto]       = useState(null);
+  const [preview, setPreview]   = useState(null);
+  const [error, setError]       = useState("");
+  const [points, setPoints]     = useState(0);
 
-  // Load existing reviews and keyword suggestions
   useEffect(() => {
-    if (!restaurantId) {
-      setError("Restaurant not found. Please go back and try again.");
-      return;
-    }
-
-    api.get(`/reviews/${restaurantId}`)
-      .then(({ data }) => setReviews(data))
-      .catch((err) => console.error("Error loading reviews:", err));
-
+    api.get(`/reviews/${restaurantId}`).then(({ data }) => setReviews(data));
     api.get(`/reviews/my-keywords/${restaurantId}`)
       .then(({ data }) => setKeywords(data.keywords || []))
       .catch(() => {
-        // Fallback to general keywords
         api.get(`/reviews/keywords/${restaurantId}`)
-          .then(({ data }) => setKeywords(data.keywords || []))
-          .catch(console.error);
+          .then(({ data }) => setKeywords(data.keywords || []));
       });
   }, [restaurantId]);
 
@@ -56,33 +45,15 @@ export default function Review() {
   };
 
   const handleKeyword = (kw) => {
-    setText((prev) => (prev ? `${prev} ${kw}` : kw));
+    setText((prev) => prev ? `${prev} ${kw}` : kw);
   };
 
   const handleSubmit = async () => {
-    // Clear previous messages
-    setError("");
-    setSuccess("");
-
-    // Validation
-    if (!rating) {
-      setError("⭐ Please select a star rating (1-5)");
-      return;
-    }
-    if (!text.trim()) {
-      setError("✏️ Please write a review (at least 10 characters)");
-      return;
-    }
-    if (text.trim().length < 10) {
-      setError("✏️ Review must be at least 10 characters");
-      return;
-    }
-    if (!restaurantId) {
-      setError("🏪 Restaurant not found");
-      return;
-    }
+    if (!rating) return setError("Please select a rating");
+    if (text.trim().length < 10) return setError("Review must be at least 10 characters");
 
     setLoading(true);
+    setError("");
 
     try {
       const formData = new FormData();
@@ -95,31 +66,20 @@ export default function Review() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // ✅ SUCCESS - Stay on page and show feedback
       setPoints(data.pointsAwarded);
       setSuccess(data.message);
-      
-      // Reset form
       setRating(0);
       setText("");
       setPhoto(null);
       setPreview(null);
 
-      // Reload reviews to show the new review
       const updated = await api.get(`/reviews/${restaurantId}`);
       setReviews(updated.data);
 
-      // Scroll to top to show success message
-      window.scrollTo({ top: 0, behavior: "smooth" });
-
-      // Clear success message after 5 seconds
-      setTimeout(() => {
-        setSuccess("");
-      }, 5000);
+      // ✅ FIX: Redirect to home after 2 seconds on success
+      setTimeout(() => navigate("/"), 2000);
     } catch (err) {
-      const errorMsg = err.response?.data?.message || "Failed to submit review";
-      setError(`❌ ${errorMsg}`);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      setError(err.response?.data?.message || "Failed to submit review");
     } finally {
       setLoading(false);
     }
@@ -129,15 +89,13 @@ export default function Review() {
     <div className="review-page">
       <div className="review-container">
         <div className="review-top-bar">
-          <button className="review-back" onClick={() => navigate(-1)}>
-            ← Back
-          </button>
+          <button className="review-back" onClick={() => navigate(-1)}>← Back</button>
           <h2>Rate & Review</h2>
         </div>
 
-        {/* Star Rating Section */}
+        {/* Star Rating */}
         <div className="star-section">
-          <label className="star-label">⭐ Select Your Rating</label>
+          <p className="section-label">⭐ Select Your Rating</p>
           <div className="star-row">
             {STARS.map((s) => (
               <span
@@ -156,7 +114,6 @@ export default function Review() {
               </span>
             )}
           </div>
-          {!rating && <p className="star-hint">👆 Tap to rate</p>}
         </div>
 
         {/* Keyword suggestions */}
@@ -165,11 +122,7 @@ export default function Review() {
             <p className="keywords-label">💡 Suggested keywords — tap to add:</p>
             <div className="keywords-list">
               {keywords.map((kw) => (
-                <button
-                  key={kw}
-                  className="keyword-chip"
-                  onClick={() => handleKeyword(kw)}
-                >
+                <button key={kw} className="keyword-chip" onClick={() => handleKeyword(kw)}>
                   {kw}
                 </button>
               ))}
@@ -179,7 +132,7 @@ export default function Review() {
 
         {/* Review textarea */}
         <div className="textarea-section">
-          <label className="textarea-label">✏️ Your Review</label>
+          <p className="section-label">✏️ Your Review</p>
           <textarea
             className="review-textarea"
             placeholder="Share your experience... (min 10 characters)"
@@ -187,11 +140,12 @@ export default function Review() {
             onChange={(e) => setText(e.target.value)}
             rows={5}
           />
-          <div className="textarea-meta">
-            <span className={wordCount < 10 ? "text-warning" : ""}>
-              {wordCount} words
-            </span>
-          </div>
+        </div>
+
+        {/* Word count + points preview */}
+        <div className="review-meta">
+          <span>{wordCount} words</span>
+          <span className="points-preview">🏆 You'll earn ~{getPointsPreview()} points</span>
         </div>
 
         {/* Photo upload */}
@@ -216,10 +170,7 @@ export default function Review() {
               <img src={preview} alt="preview" className="photo-preview" />
               <button
                 className="photo-remove"
-                onClick={() => {
-                  setPhoto(null);
-                  setPreview(null);
-                }}
+                onClick={() => { setPhoto(null); setPreview(null); }}
               >
                 ✕
               </button>
@@ -227,33 +178,21 @@ export default function Review() {
           )}
         </div>
 
-        {/* Points preview */}
-        <div className="review-meta">
-          <span>🏆 You'll earn ~{getPointsPreview()} points</span>
-        </div>
+        {error && <p className="review-error">{error}</p>}
 
-        {/* Error Message */}
-        {error && (
-          <div className="review-error-box">
-            <p>{error}</p>
-          </div>
-        )}
-
-        {/* Success Message */}
         {success && (
           <div className="review-success">
             <p>✅ {success}</p>
-            <p className="points-awarded">+{points} reward points added!</p>
+            <p className="points-awarded">+{points} reward points! Redirecting home...</p>
           </div>
         )}
 
-        {/* Submit Button */}
         <button
-          className={`submit-btn ${!rating || text.trim().length < 10 ? "disabled" : ""}`}
+          className="submit-btn"
           onClick={handleSubmit}
-          disabled={loading || !rating || text.trim().length < 10}
+          disabled={loading || !!success}
         >
-          {loading ? "Submitting..." : `Submit Review · Earn ${getPointsPreview()} pts`}
+          {loading ? "Submitting..." : success ? "✅ Submitted!" : `Submit Review · Earn ${getPointsPreview()} pts`}
         </button>
 
         {/* Existing reviews */}

@@ -70,12 +70,16 @@ export default function Login() {
           <p className="test-title">TEST ACCOUNTS</p>
           <div className="test-accounts-grid">
             <button className="test-account-btn" onClick={() =>
-              setForm({ email: "customer@test.com", password: "password123" })}>
+              setForm({ email: "customer@foodrush.com", password: "owner123" })}>
               🛒 Customer
             </button>
             <button className="test-account-btn" onClick={() =>
-              setForm({ email: "owner@test.com", password: "password123" })}>
+              setForm({ email: "owner@foodrush.com", password: "owner123" })}>
               🏪 Restaurant
+            </button>
+            <button className="test-account-btn" onClick={() =>
+              setForm({ email: "courier@test.com", password: "owner123" })}>
+              🚴 Courier
             </button>
           </div>
         </div>

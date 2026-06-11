@@ -29,12 +29,28 @@ export default function DeliveryHome() {
       .finally(() => setLoading(false));
   }, []);
 
+  // ✅ FIX: Added order:placed listener so new orders appear in real-time
   useEffect(() => {
     if (!socket) return;
-    socket.on("order:assigned", (order) => {
-      setOrders((prev) => prev.filter((o) => o._id !== order.orderId));
+
+    // New order available for couriers to pick up
+    socket.on("order:placed", (order) => {
+      setOrders((prev) => {
+        // Avoid duplicates
+        if (prev.find((o) => o._id === order._id)) return prev;
+        return [order, ...prev];
+      });
     });
-    return () => socket.off("order:assigned");
+
+    // Order was accepted by another courier — remove from available list
+    socket.on("order:assigned", ({ orderId }) => {
+      setOrders((prev) => prev.filter((o) => o._id !== orderId));
+    });
+
+    return () => {
+      socket.off("order:placed");
+      socket.off("order:assigned");
+    };
   }, [socket]);
 
   const acceptDelivery = async (orderId) => {

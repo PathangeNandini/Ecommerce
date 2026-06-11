@@ -74,8 +74,8 @@ router.delete('/:id', protect, restaurantOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ msg: err.message }); }
 });
 
-// GET /api/menu/:restaurantId — public
-router.get('/:restaurantId', protect, async (req, res) => {
+// GET /api/menu/:restaurantId — public (no auth required)
+router.get('/:restaurantId', async (req, res) => {
   try {
     const items = await MenuItem.find({ restaurantId: req.params.restaurantId });
     res.json(items);

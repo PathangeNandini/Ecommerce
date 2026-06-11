@@ -33,10 +33,9 @@ export default function ManageOrders() {
   useEffect(() => {
     // Fetch ALL orders for this restaurant
     Promise.all([
-      api.get("/orders/pending"),           // placed orders
-      api.get("/orders/revenue"),           // to get restaurantId
+      api.get("/orders/pending"),
+      api.get("/orders/revenue"),
     ]).then(async ([pendingRes]) => {
-      // Also fetch all orders via a broader query
       try {
         const allRes = await api.get("/orders/all");
         setOrders(Array.isArray(allRes.data) ? allRes.data : []);
@@ -49,15 +48,27 @@ export default function ManageOrders() {
     }).finally(() => setLoading(false));
   }, []);
 
-  // Live updates via WebSocket
+  // ✅ FIX: Added socket.emit("join:owner") so this page joins the restaurant room
   useEffect(() => {
     if (!socket) return;
+
+    // Join the restaurant room so we receive order events
+    socket.emit("join:owner");
+
     socket.on("order:placed", (order) => {
-      setOrders((prev) => [order, ...prev]);
+      setOrders((prev) => {
+        // Avoid duplicates
+        if (prev.find((o) => o._id === order._id)) return prev;
+        return [order, ...prev];
+      });
     });
+
     socket.on("order:status", ({ orderId, status }) => {
-      setOrders((prev) => prev.map((o) => o._id === orderId ? { ...o, status } : o));
+      setOrders((prev) =>
+        prev.map((o) => (o._id === orderId ? { ...o, status } : o))
+      );
     });
+
     return () => {
       socket.off("order:placed");
       socket.off("order:status");
@@ -67,7 +78,9 @@ export default function ManageOrders() {
   const handleStatusChange = async (orderId, status) => {
     try {
       await api.patch(`/orders/${orderId}/status`, { status });
-      setOrders((prev) => prev.map((o) => o._id === orderId ? { ...o, status } : o));
+      setOrders((prev) =>
+        prev.map((o) => (o._id === orderId ? { ...o, status } : o))
+      );
     } catch {
       setError("Failed to update order status");
     }
@@ -131,7 +144,15 @@ export default function ManageOrders() {
                   </span>
                   <span
                     className="order-status-badge"
-                    style={{ background: STATUS_COLORS[order.status] + "22", color: STATUS_COLORS[order.status], border: `1px solid ${STATUS_COLORS[order.status]}44`, borderRadius: 100, padding: "0.2rem 0.75rem", fontSize: "0.78rem", fontWeight: 700 }}
+                    style={{
+                      background: STATUS_COLORS[order.status] + "22",
+                      color: STATUS_COLORS[order.status],
+                      border: `1px solid ${STATUS_COLORS[order.status]}44`,
+                      borderRadius: 100,
+                      padding: "0.2rem 0.75rem",
+                      fontSize: "0.78rem",
+                      fontWeight: 700
+                    }}
                   >
                     {STATUS_LABELS[order.status] || order.status}
                   </span>

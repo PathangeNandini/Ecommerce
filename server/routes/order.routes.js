@@ -1,23 +1,36 @@
 const express = require('express');
 const router = express.Router();
-const orderController = require('../controllers/order.controller');
 const { protect, restaurantOnly, courierOnly } = require('../middleware/authMiddleware');
+const {
+  placeOrder,
+  getMyOrders,
+  getOrder,
+  updateStatus,
+  getPendingOrders,   // ✅ FIX: was "getAllPendingOrders" — doesn't exist in controller
+  getAllOrders,
+  getAvailableDeliveries,
+  getDailyRevenue,
+  getMyDeliveries,
+  getMyEarnings,
+} = require('../controllers/orderController');
 
-router.use(protect);
+// ── Consumer ──────────────────────────────────────────────
+router.post('/',        protect, placeOrder);
+router.get('/my',       protect, getMyOrders);
 
-router.post('/',                                           orderController.placeOrder);
-router.get('/my',                                          orderController.getMyOrders);
-router.get('/my-deliveries',      courierOnly,             orderController.getMyDeliveries);
-router.get('/my-earnings',        courierOnly,             orderController.getMyEarnings);
-router.get('/revenue',            restaurantOnly,          orderController.getDailyRevenue);
-router.get('/pending',            restaurantOnly,          orderController.getPendingOrders);
-router.get('/all',                restaurantOnly,          orderController.getAllOrders);
-router.get('/all-pending',        restaurantOnly,          orderController.getPendingOrders);
-router.get('/available-deliveries', courierOnly,           orderController.getAvailableDeliveries);
-router.get('/:id',                                         orderController.getOrder);
-router.patch('/:id/status', (req, res, next) => {
-  if (req.user.role === 'restaurant' || req.user.role === 'courier') return next();
-  return res.status(403).json({ message: 'Access denied' });
-}, orderController.updateStatus);
+// ── Restaurant Owner ──────────────────────────────────────
+router.get('/revenue',      protect, restaurantOnly, getDailyRevenue);
+router.get('/all-pending',  protect, restaurantOnly, getPendingOrders);   // ✅ FIX: now uses getPendingOrders
+router.get('/all',          protect, restaurantOnly, getAllOrders);
+router.get('/pending',      protect, restaurantOnly, getPendingOrders);
+
+// ── Courier ───────────────────────────────────────────────
+router.get('/available-deliveries', protect, courierOnly, getAvailableDeliveries);
+router.get('/my-deliveries',        protect, courierOnly, getMyDeliveries);
+router.get('/my-earnings',          protect, courierOnly, getMyEarnings);
+
+// ── Shared ────────────────────────────────────────────────
+router.get('/:id',           protect, getOrder);
+router.patch('/:id/status',  protect, updateStatus);
 
 module.exports = router;
